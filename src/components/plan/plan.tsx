@@ -4,11 +4,14 @@ import { DataSchool } from "~/lib/data";
 import { PlanCollegePicker } from "./plan-college-picker";
 import { useState } from "react";
 import { Button } from "../ui/button";
-import { XIcon } from "lucide-react";
+import { ChevronsUpDown, MessageCircleWarning, XIcon } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
-import { Separator } from "../ui/separator";
 import { PickerWithGroups } from "../ui/picker";
 import { Label } from "../ui/label";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
+import { Badge } from "../ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
+
 
 
 interface Props {
@@ -19,36 +22,36 @@ interface Props {
 
 export function Plan({ transferColleges, homeID, communityColleges }: Props) {
     const [selectedTransferColleges, setSelectedTransferColleges] = useState<Record<string, boolean>>({})
-    const [selectedMajors, setSelectedMajors] = useState<Record<string,{
-        transferCollegeID:number,
-        value:string,
+    const [selectedMajors, setSelectedMajors] = useState<Record<string, {
+        transferCollegeID: number,
+        value: string,
     }>>({})
     const selectedMajorSet = Object.keys(selectedMajors)
 
     const selectedColleges = Object.entries(selectedTransferColleges)
         .filter(([_, v]) => v)
         .map(([k, _]) => k)
-    
+
     const optionsTransferFiltered = new Map([
         ...transferColleges
     ])
-    selectedColleges.forEach(v=>optionsTransferFiltered.delete(Number(v)))
+    selectedColleges.forEach(v => optionsTransferFiltered.delete(Number(v)))
 
-    const majorOptions = selectedColleges.map(id=>{
+    const majorOptions = selectedColleges.map(id => {
         const college = transferColleges.get(Number(id))!
-        return{
-           label:college.name,
-           options:college.majors.map(m=>({
-                label:m,
-                value:m+"[SPLIT]"+id
-           })).filter(m=>!selectedMajorSet.includes(m.value))
+        return {
+            label: college.name,
+            options: college.majors.map(m => ({
+                label: m,
+                value: m + "[SPLIT]" + id
+            })).filter(m => !selectedMajorSet.includes(m.value))
         }
     })
 
-    
+
 
     return (
-        <div className="p-2 w-full max-w-7xl mx-auto space-y-4">
+        <div className="p-2 w-full max-w-6xl mx-auto space-y-12">
             <div className="md:grid grid-cols-2 gap-4 w-full">
                 <Card>
                     <CardHeader>
@@ -82,8 +85,8 @@ export function Plan({ transferColleges, homeID, communityColleges }: Props) {
                                     selectedColleges.map((n) => {
                                         const college = transferColleges.get(Number(n))
                                         return (
-                                            <Button onClick={(e) => setSelectedTransferColleges((prev)=>{
-                                                const copy = {...prev}
+                                            <Button onClick={(e) => setSelectedTransferColleges((prev) => {
+                                                const copy = { ...prev }
                                                 delete copy[n]
                                                 return copy;
                                             })} size="tiny" variant="secondary" Icon={XIcon}>
@@ -113,9 +116,9 @@ export function Plan({ transferColleges, homeID, communityColleges }: Props) {
                                 onSelect={(id) => {
                                     setSelectedMajors({
                                         ...selectedMajors,
-                                        [id]:{
-                                            transferCollegeID:Number(id.split("[SPLIT]")[1]),
-                                            value:id
+                                        [id]: {
+                                            transferCollegeID: Number(id.split("[SPLIT]")[1]),
+                                            value: id
                                         }
                                     })
                                 }
@@ -123,12 +126,12 @@ export function Plan({ transferColleges, homeID, communityColleges }: Props) {
                             />
                             <div className="flex flex-wrap overflow-y-auto gap-2 text-sm">
                                 {
-                                    Object.entries(selectedMajors).map(([key,major]) => {
-                                        const [majorName,collegeID] = key.split("[SPLIT]")
+                                    Object.entries(selectedMajors).map(([key, major]) => {
+                                        const [majorName, collegeID] = key.split("[SPLIT]")
                                         const college = transferColleges.get(Number(collegeID))!.code
                                         return (
-                                            <Button onClick={(e) => setSelectedMajors((prev)=>{
-                                                const copy = {...prev}
+                                            <Button onClick={(e) => setSelectedMajors((prev) => {
+                                                const copy = { ...prev }
                                                 delete copy[key]
                                                 return copy;
                                             })} size="tiny" variant="secondary" Icon={XIcon}>
@@ -142,20 +145,60 @@ export function Plan({ transferColleges, homeID, communityColleges }: Props) {
                         </aside>
                     </CardContent>
                 </Card>
-        
+
             </div>
-            <Separator/>
+
 
             {
-                (selectedMajorSet.length === 0) ?
+                (selectedMajorSet.length === 0 && false) ?
                     <div className="text-center py-12">
                         <Label>Select a Transfer College and Major to begin ☝️</Label>
                     </div>
 
-                :
-                    <h1>
-                        hi
-                    </h1>
+                    :
+                    <>
+
+                    <Alert className="items-center">
+                        <MessageCircleWarning/>
+                        <AlertTitle>Pending Requirements</AlertTitle>
+                        <AlertDescription>
+                            Complete the questions at the bottom of this page to get the most accurate recommendations
+                        </AlertDescription>
+                    </Alert>
+                    <section className="space-y-4">
+                        <h1 className="font-bold md:text-2xl text-xl">
+                            Requirements
+                        </h1>
+                        <div>
+                            <Collapsible>
+                                <Card className="inline-block">
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-4">
+                                            <p>Intro To Fortnite (G1A)</p>
+                                            <Badge>
+                                                6 Units
+                                            </Badge>
+                                            <div>
+                                                <CollapsibleTrigger asChild>
+                                                    <Button variant="secondary" size="tiny" Icon={ChevronsUpDown} />
+                                                </CollapsibleTrigger>
+                                            </div>
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CollapsibleContent>
+                                        <CardContent>
+                                            <CardDescription>
+                                                Hello
+                                            </CardDescription>
+                                        </CardContent>
+                                    </CollapsibleContent>
+                                </Card>
+                            </Collapsible>
+                        </div>
+
+                    </section>
+
+                    </>
 
             }
 
