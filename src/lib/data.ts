@@ -1,6 +1,8 @@
-export const API_URL_BASE = "https://cdn.jsdelivr.net/gh/Basalt49re/AssistData@updated";
-export const LAST_UPDATED = "8/25/2024";
-export const getLastUpdatedYear = () => LAST_UPDATED.split("/")[2];
+import type { AgreementByMajor } from "@lehuyh/assist-js/types";
+
+export const API_URL_BASE = "https://cdn.jsdelivr.net/gh/Basalt49re/AssistData@react1";
+export const LAST_UPDATED = "8/30/2024";
+export const LAST_UPDATED_YEAR = LAST_UPDATED.split("/")[2];
 
 export const escapeForFilename = (str: string) => str.replaceAll(" ","_").replaceAll("/","-").replaceAll(".","+").replaceAll(":",";")
 
@@ -19,4 +21,15 @@ export const getCollegeInfo = async()=>{
             majors: string[]
         })][]
     }
+}
+
+export const getMajor = async({
+    from, to, major
+}:{
+    from: number,
+    to: number,
+    major: string
+})=>{
+    const res = await fetch(`${API_URL_BASE}/${LAST_UPDATED_YEAR}/${from}-${to}/${escapeForFilename(major)}.json`)
+    return await res.json() as AgreementByMajor
 }

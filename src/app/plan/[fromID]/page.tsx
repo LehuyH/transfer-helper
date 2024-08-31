@@ -9,7 +9,7 @@ export async function generateStaticParams(){
     }))
 }
 
-export default async function PlanPage({ params }: { params: { slug: string } }) {
+export default async function PlanPage({ params }: { params: { fromID: string } }) {
 
     const { transferColleges, communityColleges } = await getCollegeInfo()
     const transferCollegeMap = new Map(transferColleges)
@@ -17,7 +17,7 @@ export default async function PlanPage({ params }: { params: { slug: string } })
     return (
         <main className="h-full">
            <Plan transferColleges={transferCollegeMap} communityColleges={communityCollegeMap}
-                homeID={Number(params.slug)}
+                homeID={Number(params.fromID)}
             />
         </main>
     )

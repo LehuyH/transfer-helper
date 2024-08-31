@@ -25,19 +25,22 @@ export class Cell {
     templateCellId: string;
     units: number;
     required: REQUIREMENT_STATUS;
+    selected = false;
 
-    constructor(cell: CellType, forceRequirment?: REQUIREMENT_STATUS) {
+    constructor(cell: CellType, forceRequirements?: REQUIREMENT_STATUS) {
         this.data = cell;
         this.templateCellId = cell.templateCellId;
         this.units = this.data.courses.reduce((a, b) => a + b.maxUnits, 0)
 
         if (this.checkIsRequired() !== "NEUTRAL") {
             this.required = this.checkIsRequired();
-        } else if (forceRequirment) {
-            this.required = forceRequirment;
+        } else if (forceRequirements) {
+            this.required = forceRequirements;
         } else {
             this.required = "NEUTRAL";
         }
+
+        if(this.required === "REQUIRED") this.selected = true;
     }
 
     isFufilled(
@@ -138,11 +141,13 @@ export class Cell {
 }
 
 export class Section {
-    pending = false;
+    selected = false;
+    letter = "";
     data: ISection;
 
     agreements: Cell[][];
     requiredAgreements: Cell[][];
+    required = false;
 
     instruction: {
         pick?: {
@@ -158,12 +163,8 @@ export class Section {
     }
 
 
-    constructor(section: ISection, isRequired?: boolean) {
+    constructor(section: ISection, forceRequirements?: REQUIREMENT_STATUS) {
         this.data = section;
-        this.agreements = section.agreements.map(r => r.courses.map(c => new Cell(c,
-            (isRequired ?? false) ? "REQUIRED" : undefined
-        )))
-
         //Populate instruction
         //CASE 1, Pick N
         const pickN = this.data.sectionAdvisements?.find(a => a.type === 'NFollowing')
@@ -186,8 +187,17 @@ export class Section {
             }
         }
 
+        //We only force requirement if there's no instruction
+        this.agreements = section.agreements.map(r => r.courses.map(c => new Cell(c,
+            (this.instruction.pick) ?  undefined : forceRequirements
+        )))
+
         //Populate max
         this.requiredAgreements = this.agreements.filter(a => a.some(c => c.required === "REQUIRED"))
+        if (this.requiredAgreements.length > 0 || forceRequirements === 'REQUIRED'){
+            this.required = true;
+            this.selected = true;
+        }
         this.max = {
             unitsFufilled: this.requiredAgreements.reduce((a, b) => b.reduce((a, v) => v.units, 0), 0),
             classesFufilled: this.requiredAgreements.reduce((a, b) => b.reduce((a, v) => v.data.courses.length, 0), 0)
@@ -200,20 +210,7 @@ export class Section {
         classes: number
     } {
 
-        let unitsFufilled = 0;
-        let classesFufilled = 0;
-
-        for (const agreement of this.requiredAgreements) {
-            for (const cell of agreement) {
-                const fufillment = cell.isFufilled(props);
-                if (fufillment.fufilled) {
-                    unitsFufilled += cell.units;
-                    classesFufilled += cell.data.courses.length;
-                }
-            }
-        }
-
-
+        const { units: unitsFufilled, classes: classesFufilled } = this.getFilledData(props);
 
         if (this.instruction.pick) {
             const amount = this.instruction.pick.amount;
@@ -242,11 +239,67 @@ export class Section {
         }
     }
 
+    getFilledData(props: FulfillmentProps) {
+        let unitsFufilled = 0;
+        let classesFufilled = 0;
+
+        for (const agreement of this.requiredAgreements) {
+            for (const cell of agreement) {
+                if(!cell.selected) continue;
+                const fufillment = cell.isFufilled(props);
+                if (fufillment.fufilled) {
+                    unitsFufilled += cell.units;
+                    classesFufilled += cell.data.courses.length;
+                }
+            }
+        }
+
+        return {
+            units: unitsFufilled,
+            classes: classesFufilled
+        }
+    }
+
     getRequiredCellIDs() {
         return this.agreements.flatMap(a => a).filter(c => c.required === "REQUIRED").flatMap(c => c.data.templateCellId)
     }
 
+    readyCheck(props: FulfillmentProps): {
+        ready: boolean,
+        message: string | null
+    } {
+       //Pick
+        if (this.instruction.pick) {
+            const amount = this.instruction.pick.amount;
+            const type = this.instruction.pick.type;
+            const { units, classes } = this.getFilledData(props);
+
+            if (type === "UNIT") {
+                const passed = units === amount;
+                return {
+                    ready: passed,
+                    message: passed ? null : `Please select ${amount - units} more unit(s) in section ${this.letter}`
+                }
+            } else {
+                const passed = classes === amount;
+                return {
+                    ready: passed,
+                    message: passed ? null : `Please select ${amount - classes} more class(es) in section ${this.letter}`
+                }
+            }
+        }
+        //All
+        else {
+            return {
+                ready: true,
+                message: null
+            }
+        }
+    }
+
 }
+
+const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 export class Group {
     data: IGroup & {
@@ -302,11 +355,97 @@ export class Group {
         }
 
         //Build sections
-        this.sections = this.data.sections.map(s => new Section(s, this.required === "REQUIRED"))
+        this.sections = this.data.sections.map((s,i) =>{
+            const section = new Section(s,this.required)
+            section.letter = ALPHABET[i]!
+            return section
+        })
+    }
+
+    /** All instructions are fulfilled */
+    readyCheck(props: FulfillmentProps): {
+        ready: boolean,
+        message: string | null
+    } {
+
+        if (this.instruction.pick) {
+            const amount = this.instruction.pick.amount;
+            const type = this.instruction.pick.type;
+
+            //Cumulative allowed in OR
+            if (this.instruction.type === "Or") {
+                let unitsFufilled = 0;
+                let classesFufilled = 0;
+
+                for (const section of this.getSelectedSections()) {
+                    const fufillment = section.isFufilled(props);
+                    unitsFufilled += fufillment.units;
+                    classesFufilled += fufillment.classes;
+                }
+
+                if (type === "UNIT") {
+                    const passed = unitsFufilled === amount;
+                    return {
+                        ready: passed,
+                        message: passed ? null : `Please select ${amount - unitsFufilled} more unit(s) across all sections`
+                    }
+                } else {
+                    const passed = classesFufilled === amount;
+                    return {
+                        ready: passed,
+                        message: passed ? null : `Please select ${amount - classesFufilled} more classe(s) across all sections`
+                    }
+                }
+            }else{
+                //All selected in AND
+                let allFufilled = true;
+                const message: string[] = [];
+               
+                this.getSelectedSections().forEach((s)=>{
+                    const { units, classes } = s.getFilledData(props);
+                    if (type === "UNIT") {
+                        if (units < amount) {
+                            allFufilled = false;
+                            message.push(`Section ${s.letter} requires ${amount - units} more unit(s)`)
+                        }
+                    }else {
+                        if (classes < amount) {
+                            allFufilled = false;
+                            message.push(`Section ${s.letter} requires ${amount - classes} more classe(s_`)
+                        }
+                    }
+                })
+
+                return {
+                    ready: allFufilled,
+                    message: allFufilled ? null : message.join("\n")
+                }
+            }
+        }else{
+            if(this.instruction.type === "Or"){
+                return this.sections.length > 0 ? {
+                    ready: true,
+                    message: null
+                } : {
+                    ready: false,
+                    message: "Please select at least one section"
+                }
+            }else{
+                return {
+                    ready: true,
+                    message: null
+                }
+            }
+        }
+
     }
 
     getRequiredCellIDs() {
         return this.sections.flatMap(s => s.getRequiredCellIDs())
+    }
+
+    getSelectedSections() {
+        return this.sections.filter(s => s.selected)
     }
 
     isFufilled(props: FulfillmentProps) {
@@ -317,7 +456,7 @@ export class Group {
                 let unitsFufilled = 0;
                 let classesFufilled = 0;
 
-                for (const section of this.sections) {
+                for (const section of this.getSelectedSections()) {
                     const fufillment = section.isFufilled(props);
                     unitsFufilled += fufillment.units;
                     classesFufilled += fufillment.classes;
@@ -342,7 +481,6 @@ export class Group {
 
             //Pick AND, cumulative not allowed
             if (this.instruction.type === "And") {
-                let allFufilled = true;
                 for (const section of this.sections) {
                     const fufillment = section.isFufilled(props);
                     if (this.instruction.pick.type === "UNIT") {
