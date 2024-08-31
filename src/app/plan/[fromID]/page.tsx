@@ -5,7 +5,7 @@ export async function generateStaticParams(){
     const { communityColleges } = await getCollegeInfo() 
     
     return Array.from(communityColleges.keys()).map(v=>({
-        slug: v
+        fromID: v.toString()
     }))
 }
 
