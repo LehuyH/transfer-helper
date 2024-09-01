@@ -2,6 +2,7 @@ import type {
     Agreement,
     Articulation,
     CellType,
+    Course,
     Group as IGroup,
     Section as ISection,
 } from "@lehuyh/assist-js/types";
@@ -9,9 +10,13 @@ import type {
 export type REQUIREMENT_STATUS = "REQUIRED" | "NOT_REQUIRED" | "NEUTRAL";
 
 export interface FulfillmentProps {
-    fromClassesTaken: Set<number>,
+    fromClassesTaken: Record<number, Course & {
+        requiredBy: string[]
+    }>,
     numClassesUsed: Map<number, number>,
-    agreements: Map<string, Agreement>
+    agreements: Map<string, (Agreement &{
+        major: string
+    })>
 }
 
 export interface Fulfillment {
@@ -28,9 +33,32 @@ export class Cell {
     selected = false;
 
     constructor(cell: CellType, forceRequirements?: REQUIREMENT_STATUS) {
+        //@ts-ignore HACK for GEs
+        if(!cell.courses && cell.generalEducationArea){
+            //@ts-ignore
+            const geName = cell.generalEducationArea.name
+            //@ts-ignore
+            const geCode = cell.generalEducationArea.code
+            cell.courses = [{
+                courseTitle:geName,
+                id: cell.templateCellId + '-GE-' +geName,
+                maxUnits: 0,
+                prefix: geCode,
+                courseNumber: '',
+                position:-1,
+                courseIdentifierParentId: -1,
+                departmentParentId: -1,
+                prefixParentId: -1,
+                prefixDescription: '',
+                department:'',
+                begin:'',
+                end:'',
+                minUnits:0,
+            }]
+        }
         this.data = cell;
         this.templateCellId = cell.templateCellId;
-        this.units = this.data.courses.reduce((a, b) => a + b.maxUnits, 0)
+        this.units = this.data.courses?.reduce((a, b) => a + b.maxUnits, 0)
 
         if (this.checkIsRequired() !== "NEUTRAL") {
             this.required = this.checkIsRequired();
@@ -46,14 +74,15 @@ export class Cell {
     isFufilled(
         { fromClassesTaken, numClassesUsed, agreements }: FulfillmentProps
     ): Fulfillment {
+
         let missing: number[] = [];
         let warnings: string[] = [];
         const agreement = agreements.get(this.templateCellId);
         if (!agreement) {
             return {
-                fufilled: true,
+                fufilled: false,
                 missing: [],
-                warnings: [`No articulation for ${this.data.courses.map(c => `${c.prefix}${c.courseNumber}`).join(", ")}. This requirement MAY be waived.`]
+                warnings: [`No articulation for ${this.data.courses?.map(c => `${c.prefix}${c.courseNumber}`).join(", ")}. This requirement MAY be waived.`]
             }
         }
 
@@ -65,14 +94,14 @@ export class Cell {
             for (const fromClass of group.fromClasses) {
                 const fromClassID = fromClass.courseIdentifierParentId;
                 const classLimited = fromClass.attributes?.some(a => a.content.toLowerCase().includes("can only apply to one"))
-                const classNotFufilled = !fromClassesTaken.has(fromClassID);
-                const classCantBeUsed = fromClassesTaken.has(fromClassID) && classLimited && draftUsedMap.get(fromClassID) !== 0;
+                const classNotFufilled = !fromClassesTaken[fromClassID];
+                const classCantBeUsed = fromClassesTaken[fromClassID] && classLimited && draftUsedMap.get(fromClassID) !== 0;
 
                 if (classNotFufilled || classCantBeUsed) {
                     groupFufilled = false;
                     missing.push(fromClassID);
                     if (classCantBeUsed) {
-                        warnings.push(`${fromClass.courseTitle} cannot be reused for transfer course ${this.data.courses.map(c => c.courseTitle).join(", ")}`);
+                        warnings.push(`${fromClass.courseTitle} cannot be reused for transfer course ${this.data.courses?.map(c => c.courseTitle).join(", ")}`);
                     }
                 } else {
                     draftUsedMap.set(fromClassID, (draftUsedMap.get(fromClassID) ?? 0) + 1);
@@ -81,7 +110,7 @@ export class Cell {
             }
 
             if (group.fromClasses.length === 0) {
-                warnings.push(`No articulation for ${this.data.courses.map(c => `${c.prefix}${c.courseNumber}`).join(", ")}. This requirement MAY be waived.`);
+                warnings.push(`No articulation for ${this.data.courses?.map(c => `${c.prefix}${c.courseNumber}`).join(", ")}. This requirement MAY be waived.`);
             }
 
             if (!groupFufilled) {
@@ -146,7 +175,7 @@ export class Section {
     data: ISection;
 
     agreements: Cell[][];
-    requiredAgreements: Cell[][];
+    requiredAgreements: Cell[][] = [];
     required = false;
 
     instruction: {
@@ -160,6 +189,9 @@ export class Section {
     max: {
         unitsFufilled: number,
         classesFufilled: number
+    } = {
+        unitsFufilled: 0,
+        classesFufilled: 0
     }
 
 
@@ -187,20 +219,60 @@ export class Section {
             }
         }
 
-        //We only force requirement if there's no instruction
+        //We only force requirement if there's no instruction 
         this.agreements = section.agreements.map(r => r.courses.map(c => new Cell(c,
             (this.instruction.pick) ?  undefined : forceRequirements
         )))
+        
 
-        //Populate max
-        this.requiredAgreements = this.agreements.filter(a => a.some(c => c.required === "REQUIRED"))
+        this.updateRequiredCells()
+
         if (this.requiredAgreements.length > 0 || forceRequirements === 'REQUIRED'){
             this.required = true;
             this.selected = true;
         }
-        this.max = {
-            unitsFufilled: this.requiredAgreements.reduce((a, b) => b.reduce((a, v) => v.units, 0), 0),
-            classesFufilled: this.requiredAgreements.reduce((a, b) => b.reduce((a, v) => v.data.courses.length, 0), 0)
+    }
+
+    updateRequiredCells(){
+         //Populate max
+         this.requiredAgreements = this.agreements.filter(a => a.some(c => c.required === "REQUIRED"))
+         this.max = {
+             unitsFufilled: this.agreements.reduce((a, b) => a+ b.reduce((a, v) => v.units, 0), 0),
+             classesFufilled: this.agreements.reduce((a, b) => a + b.reduce((a, v) => v.data.courses?.length ?? 0, 0), 0)
+         }
+    }
+    
+    smartPickCellIDs(agreements: FulfillmentProps['agreements']){
+        if(!this.required) return [];
+
+        const alreadySelected = this.getRequiredCellIDs()
+        const articulationsByRow = this.agreements.map(row=>row.map(c=>({
+            cell:c,
+            articulation: agreements.get(c.templateCellId)
+        })))
+
+        //Now attempt to find obvious options
+        const options = [] as string[]
+        for(const row of articulationsByRow){
+            for(const {cell,articulation} of row){
+                if(alreadySelected.includes(cell.templateCellId)) continue;
+
+                //If there's one option only, select it
+                if(articulation?.articulation.sendingArticulation?.pickOneGroup?.length === 1){
+                    options.push(cell.templateCellId)
+                    cell.selected = true
+                    cell.required = "REQUIRED"
+                }
+            }
+        }
+
+        this.updateRequiredCells()
+
+        //If options less than pick OR instruction is All, return all options
+        if((this.instruction.pick && options.length <= this.instruction.pick.amount) || this.instruction.all){
+            return options;
+        }else{
+            return [];
         }
     }
 
@@ -211,20 +283,19 @@ export class Section {
     } {
 
         const { units: unitsFufilled, classes: classesFufilled } = this.getFilledData(props);
-
         if (this.instruction.pick) {
             const amount = this.instruction.pick.amount;
             const type = this.instruction.pick.type;
             if (type === "UNIT") {
                 return {
-                    fufilled: unitsFufilled === Math.min(amount, this.max.unitsFufilled),
+                    fufilled: unitsFufilled >= Math.min(amount, this.max.unitsFufilled),
                     units: unitsFufilled,
                     classes: classesFufilled
 
                 };
             } else {
                 return {
-                    fufilled: classesFufilled === Math.min(amount, this.max.classesFufilled),
+                    fufilled: classesFufilled >= Math.min(amount, this.max.classesFufilled),
                     units: unitsFufilled,
                     classes: classesFufilled
                 }
@@ -232,7 +303,7 @@ export class Section {
         } else {
             //ALL
             return {
-                fufilled: classesFufilled === this.max.classesFufilled,
+                fufilled: classesFufilled >= this.max.classesFufilled,
                 units: unitsFufilled,
                 classes: classesFufilled
             }
@@ -249,7 +320,7 @@ export class Section {
                 const fufillment = cell.isFufilled(props);
                 if (fufillment.fufilled) {
                     unitsFufilled += cell.units;
-                    classesFufilled += cell.data.courses.length;
+                    classesFufilled += cell.data.courses?.length ?? 0;
                 }
             }
         }
@@ -275,13 +346,13 @@ export class Section {
             const { units, classes } = this.getFilledData(props);
 
             if (type === "UNIT") {
-                const passed = units === amount;
+                const passed = units >= amount;
                 return {
                     ready: passed,
                     message: passed ? null : `Please select ${amount - units} more unit(s) in section ${this.letter}`
                 }
             } else {
-                const passed = classes === amount;
+                const passed = classes >= amount;
                 return {
                     ready: passed,
                     message: passed ? null : `Please select ${amount - classes} more class(es) in section ${this.letter}`
@@ -310,6 +381,9 @@ export class Group {
 
     sections: Section[];
 
+    schoolName: string
+    majorName:string
+
     instruction: {
         pick?: {
             amount: number,
@@ -318,18 +392,20 @@ export class Group {
         type: "Or" | "And"
     };
 
-    constructor(name: string, group: IGroup) {
+    constructor(name: string, group: IGroup,schoolName:string,majorName:string) {
         this.data = {
             ...group,
             name: name
         };
+        this.schoolName = schoolName
+        this.majorName = majorName
 
         //Parse required
         if (name.toLowerCase().includes('recommended')) {
             this.required = "NOT_REQUIRED";
-        } else if (name.toLowerCase().includes('required')) {
+        } else if (name.toLowerCase().includes('require')) {
             this.required = "REQUIRED";
-        } else if (this.data.groupAttributes?.find(a => a.toLowerCase().includes("required") && !a.toLowerCase().includes("recommended"))) {
+        } else if (this.data.groupAttributes?.find(a => a.toLowerCase().includes("require") && !a.toLowerCase().includes("recommended"))) {
             this.required = "REQUIRED";
         } else {
             this.required = "NOT_REQUIRED";
@@ -384,13 +460,13 @@ export class Group {
                 }
 
                 if (type === "UNIT") {
-                    const passed = unitsFufilled === amount;
+                    const passed = unitsFufilled >= amount;
                     return {
                         ready: passed,
                         message: passed ? null : `Please select ${amount - unitsFufilled} more unit(s) across all sections`
                     }
                 } else {
-                    const passed = classesFufilled === amount;
+                    const passed = classesFufilled >= amount;
                     return {
                         ready: passed,
                         message: passed ? null : `Please select ${amount - classesFufilled} more classe(s) across all sections`
@@ -444,6 +520,10 @@ export class Group {
         return this.sections.flatMap(s => s.getRequiredCellIDs())
     }
 
+    getSmartPickCellIDs(props: FulfillmentProps['agreements']){
+        return this.sections.flatMap(s => s.smartPickCellIDs(props))
+    }
+
     getSelectedSections() {
         return this.sections.filter(s => s.selected)
     }
@@ -466,13 +546,13 @@ export class Group {
                 const type = this.instruction.pick.type;
                 if (type === "UNIT") {
                     return {
-                        fufilled: unitsFufilled === this.instruction.pick.amount,
+                        fufilled: unitsFufilled >= this.instruction.pick.amount,
                         units: unitsFufilled,
                         classes: classesFufilled
                     }
                 } else {
                     return {
-                        fufilled: classesFufilled === this.instruction.pick.amount,
+                        fufilled: classesFufilled >= this.instruction.pick.amount,
                         units: unitsFufilled,
                         classes: classesFufilled
                     }
@@ -481,6 +561,7 @@ export class Group {
 
             //Pick AND, cumulative not allowed
             if (this.instruction.type === "And") {
+                let allFufilled = true;
                 for (const section of this.sections) {
                     const fufillment = section.isFufilled(props);
                     if (this.instruction.pick.type === "UNIT") {
@@ -494,6 +575,11 @@ export class Group {
                             break;
                         }
                     }
+                }
+
+                return {
+                    fufilled: allFufilled,
+                    message: allFufilled ? null : `Please select ${this.instruction.pick.amount} more classe(s) across all sections`
                 }
             }
 
