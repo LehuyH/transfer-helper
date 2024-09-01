@@ -1,13 +1,11 @@
-"use client"
-
-import React from 'react';
-import { Button } from '@mui/material';
-
-
 export default function About() {
-  const handleBackClick = () => {
-    window.location.href = 'https://transferhelper.pages.dev/';
-  };
+    return (
+        <div className="p-2 px-6 w-full max-w-6xl mx-auto space-y-12">
+            <h1 className="md:text-3xl font-bold text-xl">
+                About
+            </h1>
+        </div>
+    )
 
-  
+
 }
