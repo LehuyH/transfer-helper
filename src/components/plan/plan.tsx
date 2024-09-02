@@ -13,9 +13,9 @@ import { useLocalStorage } from "~/lib/hooks/useLocalStorage";
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { Group, FulfillmentProps } from "~/lib/classes";
 import { PlanGroup } from "./plan-group";
-import { useState,Fragment } from "react";
+import { useState, Fragment } from "react";
 import { PlanClassTable } from "./plan-class-table";
-import Confetti from 'react-confetti-boom';
+import { PlanFinished } from "./plan-finished";
 
 
 
@@ -56,24 +56,24 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
     const optionsTransferFiltered = new Map([
         ...transferColleges
     ])
-    
+
     //CLEANUP
     selectedColleges.forEach(v => optionsTransferFiltered.delete(Number(v)))
     const majorsFiltered = Object.fromEntries(
         Object.entries(selectedMajors).filter(([_, v]) => selectedColleges.includes(v.transferCollegeID.toString()))
     )
 
-    Object.entries(userFromClassesTaken).forEach(([k,v])=>{
-        const current = Object.keys(majorsFiltered).map(v=>{
-            const [major,id] = v.split("[SPLIT]")
-                const college = transferColleges.get(Number(id))
+    Object.entries(userFromClassesTaken).forEach(([k, v]) => {
+        const current = Object.keys(majorsFiltered).map(v => {
+            const [major, id] = v.split("[SPLIT]")
+            const college = transferColleges.get(Number(id))
             return `${college!.name}: ${major}`
         })
-        if(!v.requiredBy.some(v=>current.includes(v))){
+        if (!v.requiredBy.some(v => current.includes(v))) {
             delete userFromClassesTaken[k]
         }
     })
-   
+
     const majorOptions = selectedColleges.map(id => {
         const college = transferColleges.get(Number(id))!
         const optionsUnique = Array.from(college.majors)
@@ -109,11 +109,11 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
 
     const agreements = new Map() as FulfillmentProps["agreements"]
     const fromClassesTaken = {} as FulfillmentProps["fromClassesTaken"]
-    const majorGroupNameMap = new Map<string,number>()
-    const majorAgreementsParsed = majorQueries.flatMap((a,i) => {
+    const majorGroupNameMap = new Map<string, number>()
+    const majorAgreementsParsed = majorQueries.flatMap((a, i) => {
         if (a.data) {
             const inputData = Object.values(majorsFiltered)[i]!
-            const [major,id] = inputData.value.split("[SPLIT]")
+            const [major, id] = inputData.value.split("[SPLIT]")
             const collegeName = transferColleges.get(Number(id))!.name
             a.data.agreements.forEach(agreement => {
                 agreements.set(agreement.templateCellId, {
@@ -121,22 +121,22 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                     major: `${collegeName}: ${major}`
                 })
             })
-            return Object.entries(a.data.groups).flatMap(([k, v]) => v.map(v => new Group(k, v,collegeName, major!)))
+            return Object.entries(a.data.groups).flatMap(([k, v]) => v.map(v => new Group(k, v, collegeName, major!)))
         } else {
             return null
         }
     }).filter(g => g)
-    
+
     //Ensure unique name
-    majorAgreementsParsed.forEach(g=>{
-        if(!g) return;
+    majorAgreementsParsed.forEach(g => {
+        if (!g) return;
         const name = g.data.name
-        if(majorGroupNameMap.has(name)){
+        if (majorGroupNameMap.has(name)) {
             const id = majorGroupNameMap.get(name)!
-            majorGroupNameMap.set(name,id+1)
-            g.data.name = g!.data.name + ` (${id+1})`
-        }else{
-            majorGroupNameMap.set(name,0)
+            majorGroupNameMap.set(name, id + 1)
+            g.data.name = g!.data.name + ` (${id + 1})`
+        } else {
+            majorGroupNameMap.set(name, 0)
         }
 
     })
@@ -164,10 +164,10 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
         })
     })
     const fufilment: FulfillmentProps = {
-       fromClassesTaken : {
-           ...userFromClassesTaken,
-           ...fromClassesTaken
-       },
+        fromClassesTaken: {
+            ...userFromClassesTaken,
+            ...fromClassesTaken
+        },
         numClassesUsed: numClassesUsed,
         agreements: agreements
     }
@@ -185,7 +185,7 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                 {home.name} Transfer Planner
             </h1>
             <div className="md:grid grid-cols-2 gap-4 w-full space-y-4 md:space-y-0">
-                <Card>
+                <Card className="max-w-[90vw]">
                     <CardHeader>
                         <CardTitle>
                             I Want To Transfer To...
@@ -231,7 +231,7 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                         </aside>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="max-w-[90vw]">
                     <CardHeader>
                         <CardTitle>
                             The Majors I Want Are...
@@ -297,45 +297,45 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                             {
                                 inProgress ?
 
-                                <Alert className="items-center">
-                                    <AlertCircle />
-                                    <AlertTitle>This list is INCOMPLETE</AlertTitle>
-                                    <AlertDescription>
-                                        Complete the questions at the bottom of this page to get the most accurate recommendations
-                                    </AlertDescription>
-                                </Alert>
-
-                                :
-                                <>
-                                    <div className="fixed top-0 left-0 z-10 pointer-events-none">
-                                        <Confetti mode='boom' particleCount={200} y={-0.1} spreadDeg={180} />
-                                    </div>
-                                    <Alert className="items-center">
-                                        <CheckIcon />
-                                        <AlertTitle>Looks Good!</AlertTitle>
+                                    <Alert className="items-center max-w-[90vw]">
+                                        <AlertCircle />
+                                        <AlertTitle>This list is INCOMPLETE</AlertTitle>
                                         <AlertDescription>
-                                            You have completed all the requirements for this plan. However we HIGHLY suggest manually reviewing ASSIST.org and a college counselor to make sure you are on the right track.
-
-                                            <aside className="flex flex-wrap gap-2 pt-4">
-                                                <Button variant="link" Icon={LinkIcon}>
-                                                    Review ASSIST.org
-                                                </Button>
-                                                <Button variant="link"
-                                                    onClick={() => {
-                                                        const url = `https://www.google.com/search?btnI=1&q=${encodeURIComponent(home.name + ' counseling')}`
-                                                        window.open(url, '_blank')
-                                                    }}
-                                                    Icon={LinkIcon}>
-                                                    Create Appointment with College Counselor
-                                                </Button>
-                                            </aside>
+                                            Complete the questions at the bottom of this page to get the most accurate recommendations
                                         </AlertDescription>
                                     </Alert>
-                                </>
+
+                                    :
+                                    <>
+                                        <PlanFinished homeCollege={home.name} />
+
+                                        <Alert className="items-center max-w-[90vw]">
+                                            <CheckIcon />
+                                            <AlertTitle>(Almost) Looks Good!</AlertTitle>
+                                            <AlertDescription>
+                                                <b>THIS IS NOT A REPLACEMENT FOR A COLLEGE COUNSELOR</b>
+                                                <br /><br />
+                                                While you have completed all the requirements for this plan, we HIGHLY suggest manually reviewing ASSIST.org and a college counselor to make sure you are on the right track.
+                                                <aside className="flex flex-wrap gap-2 pt-4">
+                                                    <Button variant="link" Icon={LinkIcon}>
+                                                        Review ASSIST.org
+                                                    </Button>
+                                                    <Button variant="link"
+                                                        onClick={() => {
+                                                            const url = `https://www.google.com/search?btnI=1&q=${encodeURIComponent(home.name + ' counseling')}`
+                                                            window.open(url, '_blank')
+                                                        }}
+                                                        Icon={LinkIcon}>
+                                                        Create Appointment with College Counselor
+                                                    </Button>
+                                                </aside>
+                                            </AlertDescription>
+                                        </Alert>
+                                    </>
 
                             }
 
-                            <PlanClassTable 
+                            <PlanClassTable
                                 userSelected={Object.values(userFromClassesTaken)}
                                 hardRequirements={Object.values(fromClassesTaken)} />
 

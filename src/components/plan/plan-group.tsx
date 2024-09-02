@@ -4,13 +4,15 @@ import { createContext, Dispatch, Fragment, SetStateAction, useContext, useState
 import { Separator } from "../ui/separator";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
-import { AlertCircle, CheckIcon, ChevronDown, ChevronUp, MessageCircleWarning } from "lucide-react";
+import { AlertCircle, CheckIcon, ChevronDown, ChevronUp } from "lucide-react";
 import { Agreement, Course as ICourse } from "@lehuyh/assist-js/types";
 import { Button } from "../ui/button";
 import { motion, AnimatePresence } from "framer-motion"
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Badge } from "../ui/badge";
-import { debug } from "console";
+import { Label } from "../ui/label";
+import { Checkbox } from "~/components/ui/checkbox"
+
 
 interface FufilmentContextValue extends FulfillmentProps{
     setUserFromClassesTaken:Dispatch<SetStateAction<FulfillmentProps["fromClassesTaken"]>>
@@ -30,7 +32,7 @@ export function PlanGroup({ group, fulfilment, setUserFromClassesTaken }: { grou
     const fufillmentCheck = group.isFufilled(fulfilment)
     
     return (
-        <Card>
+        <Card className="max-w-[90vw]">
             <CardHeader>
                 <CardTitle>
                     {group.data.name}
@@ -210,7 +212,7 @@ function PlanCell({ cell: c, hasInstruction }: { cell: Cell, hasInstruction: boo
                                     </CardTitle>
                               
                                     <CardDescription className="space-y-2">
-                                        <b>{fufilmentCheck.warnings.join("\n")}</b>
+                                        <b>{(optionSelectedIndex === -1) && fufilmentCheck.warnings.join("\n")}</b>
                                         <span>
                                             {
                                                 (onlyOneOption && !hasInstruction) &&
@@ -239,7 +241,7 @@ function PlanCell({ cell: c, hasInstruction }: { cell: Cell, hasInstruction: boo
                           
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="flex flex-wrap gap-2">
+                                    <div className="flex flex-col flex-wrap gap-4">
                                         {
                                             agreement?.articulation.sendingArticulation.pickOneGroup.map((g,i)=>{
                                                 return (
@@ -250,14 +252,18 @@ function PlanCell({ cell: c, hasInstruction }: { cell: Cell, hasInstruction: boo
                                                                 (g.generalAttributes ?? []).join(', ')
                                                             }
                                                         </p>
-                                                        <Button
-                                                            onClick={()=>{c.selected = true;toggleOption(g.fromClasses)}}
-                                                            variant={(i === optionSelectedIndex) ? 'default' : 'secondary'}
-                                                            disabled={(onlyOneOption && !hasInstruction)}
-                                                            Icon={ (i === optionSelectedIndex) ? CheckIcon : undefined }
-                                                            >
-                                                            {g.fromClasses.map(c=>`${c.prefix}${c.courseNumber} - ${c.courseTitle}`).join(" AND ")}
-                                                        </Button>
+                                                        
+                                                        <p className="flex gap-2 flex-wrap items-center">
+                                                            <Checkbox
+                                                                id={g.fromClasses.map(c=>c.courseIdentifierParentId).join(",")}
+                                                                checked={optionSelectedIndex === i}
+                                                                onCheckedChange={()=>{c.selected = true;toggleOption(g.fromClasses)}}
+                                                                >
+                                                            </Checkbox >
+                                                            <Label htmlFor={g.fromClasses.map(c=>c.courseIdentifierParentId).join(",")}>
+                                                                {g.fromClasses.map(c=>`${c.prefix}${c.courseNumber} - ${c.courseTitle}`).join(" AND ")}
+                                                            </Label>
+                                                        </p>
                                                     </div>
                                                 )
                                             })
