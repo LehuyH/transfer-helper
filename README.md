@@ -1,5 +1,4 @@
-# Transfer Helper 🐇
-(https://transfer.lehuy.dev)[transfer.lehuy.dev]
+# [Transfer Helper 🐇](https://transfer.lehuy.dev)
 
 🐇 Get your California Community College transfer plan in minutes!
 
