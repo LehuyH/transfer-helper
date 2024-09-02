@@ -1,7 +1,7 @@
 import type { AgreementByMajor } from "@lehuyh/assist-js/types";
 
 export const API_URL_BASE = "https://cdn.jsdelivr.net/gh/Basalt49re/AssistData@react1";
-export const LAST_UPDATED = "8/30/2024";
+export const LAST_UPDATED = "09/02/2024";
 export const LAST_UPDATED_YEAR = LAST_UPDATED.split("/")[2];
 
 export const escapeForFilename = (str: string) => str.replaceAll(" ","_").replaceAll("/","-").replaceAll(".","+").replaceAll(":",";")
