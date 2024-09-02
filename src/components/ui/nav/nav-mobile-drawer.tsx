@@ -6,13 +6,18 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion"
 import { links } from "./nav-desktop";
 import Link from "next/link";
+import { LAST_UPDATED } from "~/lib/data"
+import { Badge } from "../badge"
 
 export default function NavMobileDrawer() {
     const [showMenu, setShowMenu] = useState(false)
     return (
         <>
+            <Badge variant={"outline"} className=" text-xs">
+                Data Last Updated: {LAST_UPDATED}
+            </Badge> 
             <Button onClick={() => setShowMenu(!showMenu)} Icon={MenuIcon}>
-            </Button>
+            </Button> 
             <AnimatePresence>
                 {
                     showMenu &&
@@ -34,7 +39,7 @@ export default function NavMobileDrawer() {
                         <ul className="space-y-4 py-4">
                             {
                                 links.map((link, index) => (
-                                    <Link key={index} href={link.href} className="block w-full">
+                                    <Link key={index} href={link.href} className="block w-full" target={link.newTab ? "_blank" : "_self"}>
                                         <Button Icon={link.Icon} className="w-full">
                                             {link.label}
                                         </Button>

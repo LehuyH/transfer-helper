@@ -4,7 +4,7 @@ import Confetti from "react-confetti-boom"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet"
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "~/components/ui/drawer"
 import { Button } from "../ui/button"
-import { LinkIcon } from "lucide-react"
+import { LinkIcon, StarIcon } from "lucide-react"
 import { createBreakpoint } from "react-use"
 import { useState } from "react";
 
@@ -51,6 +51,11 @@ export function PlanFinished({ homeCollege }: {
                                                 Create Appointment with College Counselor
                                             </a>
                                         </Button>
+                                        <Button variant="default" Icon={StarIcon}>
+                                            <a href="https://studykit.app" target="_blank">
+                                                Free Study Tools (also made by me)
+                                            </a>
+                                        </Button>
                                     </aside>
                                 </DrawerDescription>
                             </DrawerHeader>
@@ -90,6 +95,11 @@ export function PlanFinished({ homeCollege }: {
                                         <Button variant="link" Icon={LinkIcon}>
                                             <a href={`https://www.google.com/search?btnI=1&q=${encodeURIComponent(homeCollege + ' counseling')}`} target="_blank" >
                                                 Create Appointment with College Counselor
+                                            </a>
+                                        </Button>
+                                        <Button variant="default" Icon={StarIcon}>
+                                            <a href="https://studykit.app" target="_blank">
+                                              Free Study Tools (also made by me)
                                             </a>
                                         </Button>
                                     </aside>
