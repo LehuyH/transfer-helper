@@ -9,7 +9,7 @@ export default async function HomePage() {
   const collegeData = await getCollegeInfo()
   const options = collegeData.communityColleges.map(entry=>entry[1]).map(s=>({
     label: s.name,
-    value: s.name.toLowerCase().replaceAll(" ", "-").toString()
+    value: s.name.toLowerCase().replaceAll(" ", "-").replaceAll(",","%2C").toString()
   }))
 
   return (
