@@ -15,6 +15,7 @@ export async function generateMetadata(
     const name = params.fromID.split("-")
     .map(v=>`${v.charAt(0).toUpperCase()}${v.slice(1)}`)
     .join(" ")
+    .replaceAll("%2C",",")
    
     return {
       title: `Transfer Plan | ${name}`,
@@ -40,7 +41,7 @@ export async function generateStaticParams(){
     const { communityColleges } = await getCollegeInfo() 
     
     return communityColleges.map(v=>({
-        fromID: v[1].name.toLowerCase().replaceAll(" ", "-").toString()
+        fromID: v[1].name.toLowerCase().replaceAll(" ", "-")
     }))
 }
 
@@ -49,7 +50,9 @@ export default async function PlanPage({ params }: { params: { fromID: string } 
     const { transferColleges, communityColleges } = await getCollegeInfo()
     const transferCollegeMap = new Map(transferColleges)
     const communityCollegeMap = new Map(communityColleges)
-    const home = communityColleges.find(v=>v[1].name.toLowerCase().replaceAll(" ", "-").toString() === params.fromID)
+    const home = communityColleges.find(v=>v[1].name.toLowerCase().replaceAll(" ", "-").replaceAll(",","%2C")
+    === params.fromID
+  )!
     return (
         <main className="h-full">
            <Plan transferColleges={transferCollegeMap} communityColleges={communityCollegeMap}
