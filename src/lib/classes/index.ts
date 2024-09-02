@@ -425,7 +425,7 @@ export class Group {
         //Parse required
         if (name.toLowerCase().includes('recommended')) {
             this.required = "NOT_REQUIRED";
-        } else if (name.toLowerCase().includes('require') || name === 'DEFAULT') {
+        } else if (name.toLowerCase().includes('require') || name === 'DEFAULT' || name.toLowerCase().includes('core')) {
             this.required = "REQUIRED";
         } else if (this.data.groupAttributes?.find(a => a.toLowerCase().includes("require") && !a.toLowerCase().includes("recommended"))) {
             this.required = "REQUIRED";
@@ -593,14 +593,19 @@ export class Group {
                 const amount = this.instruction.pick.amount;
                 const type = this.instruction.pick.type;
                 if (type === "UNIT") {
+                    const compareTo = Math.min(amount, this.getSelectedSections().reduce
+                    ((a, b) => a + (b.max.unitsFufilled ?? 0), 0))
+                    
                     return {
-                        fufilled: unitsFufilled >= this.instruction.pick.amount,
+                        fufilled: unitsFufilled >= compareTo,
                         units: unitsFufilled,
                         classes: classesFufilled
                     }
                 } else {
+                    const compareTo = Math.min(amount, this.getSelectedSections().reduce
+                    ((a, b) => a + (b.max.classesFufilled ?? 0), 0))
                     return {
-                        fufilled: classesFufilled >= this.instruction.pick.amount,
+                        fufilled: classesFufilled >= compareTo,
                         units: unitsFufilled,
                         classes: classesFufilled
                     }
@@ -613,12 +618,14 @@ export class Group {
                 for (const section of this.sections) {
                     const fufillment = section.isFufilled(props);
                     if (this.instruction.pick.type === "UNIT") {
-                        if (fufillment.units < this.instruction.pick.amount) {
+                        const compareTo = Math.min(this.instruction.pick.amount, section.max.unitsFufilled ?? 0)
+                        if (fufillment.units < compareTo) {
                             allFufilled = false;
                             break;
                         }
                     } else {
-                        if (fufillment.classes < this.instruction.pick.amount) {
+                        const compareTo = Math.min(this.instruction.pick.amount, section.max.classesFufilled ?? 0)
+                        if (fufillment.classes < compareTo) {
                             allFufilled = false;
                             break;
                         }
