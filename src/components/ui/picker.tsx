@@ -171,14 +171,14 @@ export function PickerWithGroups({
             {
               optionsFiltered.map(g => {
                 return (
-                  <CommandGroup heading={g.label}>
+                  <CommandGroup key={g.label} heading={g.label}>
                     {g.options.map((options) => {
 
-                      if (options.index > numToShow) return <></>
+                      if (options.index > numToShow) return <React.Fragment key={`${g.label}-${options.value}`}></React.Fragment>
                       return (
 
                         <CommandItem
-                          key={options.value}
+                          key={`${g.label}-${options.value}`}
                           value={options.value}
                           onSelect={onSelect}
                         >

@@ -1,16 +1,22 @@
 "use client";
 
-import { DataSchool } from "~/lib/data";
+import { DataSchool, getMajor, LAST_UPDATED } from "~/lib/data";
 import { PlanCollegePicker } from "./plan-college-picker";
-import { useState } from "react";
 import { Button } from "../ui/button";
-import { ChevronsUpDown, MessageCircleWarning, XIcon } from "lucide-react";
+import { AlertCircle, CheckIcon, LinkIcon, XIcon } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { PickerWithGroups } from "../ui/picker";
 import { Label } from "../ui/label";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
-import { Badge } from "../ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
+import { useQueries, QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { useLocalStorage } from "~/lib/hooks/useLocalStorage";
+import { useAutoAnimate } from '@formkit/auto-animate/react'
+import { Group, FulfillmentProps } from "~/lib/classes";
+import { PlanGroup } from "./plan-group";
+import { useState, Fragment } from "react";
+import { PlanClassTable } from "./plan-class-table";
+import { PlanFinished } from "./plan-finished";
+
 
 
 
@@ -20,14 +26,29 @@ interface Props {
     homeID: number
 }
 
-export function Plan({ transferColleges, homeID, communityColleges }: Props) {
-    const [selectedTransferColleges, setSelectedTransferColleges] = useState<Record<string, boolean>>({})
-    const [selectedMajors, setSelectedMajors] = useState<Record<string, {
+const queryClient = new QueryClient();
+
+export function PlanInner({ transferColleges, homeID, communityColleges }: Props) {
+    const [animationParent] = useAutoAnimate()
+    const home = communityColleges.get(homeID)!
+
+    //STATE
+    const [selectedTransferColleges, setSelectedTransferColleges] = useLocalStorage<Record<string, boolean>>(
+        `${homeID}-${LAST_UPDATED}-transferColleges`, () => ({})
+    )
+    const [selectedMajors, setSelectedMajors] = useLocalStorage<Record<string, {
         transferCollegeID: number,
         value: string,
-    }>>({})
-    const selectedMajorSet = Object.keys(selectedMajors)
+    }>>(`${homeID}-${LAST_UPDATED}-majors`, () => ({}))
 
+
+    const [userFromClassesTaken, setUserFromClassesTaken] = useLocalStorage<FulfillmentProps["fromClassesTaken"]>(
+        `${homeID}-${LAST_UPDATED}-userFromClassesTaken`, () => ({})
+    )
+    const [numClassesUsed, setNumClassesUsed] = useState<FulfillmentProps["numClassesUsed"]>(new Map())
+
+    //COMPUTED
+    const selectedMajorSet = Object.keys(selectedMajors)
     const selectedColleges = Object.entries(selectedTransferColleges)
         .filter(([_, v]) => v)
         .map(([k, _]) => k)
@@ -35,25 +56,155 @@ export function Plan({ transferColleges, homeID, communityColleges }: Props) {
     const optionsTransferFiltered = new Map([
         ...transferColleges
     ])
+
+    //CLEANUP
     selectedColleges.forEach(v => optionsTransferFiltered.delete(Number(v)))
+    const majorsFiltered = Object.fromEntries(
+        Object.entries(selectedMajors).filter(([_, v]) => selectedColleges.includes(v.transferCollegeID.toString()))
+    )
+
+    Object.entries(userFromClassesTaken).forEach(([k, v]) => {
+        const current = Object.keys(majorsFiltered).map(v => {
+            const [major, id] = v.split("[SPLIT]")
+            const college = transferColleges.get(Number(id))
+            return `${college!.name}: ${major}`
+        })
+        if (!v.requiredBy.some(v => current.includes(v))) {
+            delete userFromClassesTaken[k]
+        }
+    })
 
     const majorOptions = selectedColleges.map(id => {
         const college = transferColleges.get(Number(id))!
+        const optionsUnique = Array.from(college.majors)
         return {
             label: college.name,
-            options: college.majors.map(m => ({
+            options: optionsUnique.map(m => ({
                 label: m,
                 value: m + "[SPLIT]" + id
             })).filter(m => !selectedMajorSet.includes(m.value))
         }
     })
 
+    //Network fetches
+    const majorQueries = useQueries({
+        queries: Object.values(majorsFiltered).map(sm => {
+            const [name] = sm.value.split("[SPLIT]")
+            const queryKey = [homeID, sm.transferCollegeID, LAST_UPDATED, name]
+            return {
+                queryKey,
+                queryFn: () => getMajor({
+                    from: homeID,
+                    to: sm.transferCollegeID,
+                    major: name!
+                }),
+                retry: (retryCount: number, error: any) => {
+                    if (error.status === 403) return false;
+                    return retryCount < 3;
+                }
+            }
 
+        })
+    })
+
+    const allQueriesDone = majorQueries.every(a => a.isPending === false)
+
+    const agreements = new Map() as FulfillmentProps["agreements"]
+    const fromClassesTaken = {} as FulfillmentProps["fromClassesTaken"]
+    const majorGroupNameMap = new Map<string, number>()
+    const majorAgreementsParsed = majorQueries.flatMap((a, i) => {
+        if (a.data) {
+            const inputData = Object.values(majorsFiltered)[i]!
+            const [major, id] = inputData.value.split("[SPLIT]")
+            const collegeName = transferColleges.get(Number(id))!.name
+            a.data.agreements.forEach(agreement => {
+                agreements.set(agreement.templateCellId, {
+                    ...agreement,
+                    major: `${collegeName}: ${major}`
+                })
+            })
+
+            //Cleanup null objects in group courses
+            Object.keys(a.data.groups).forEach(key=>{
+                const groups = a.data.groups[key]
+                groups?.forEach(group=>{
+                    group.sections.forEach(section=>{
+                        section.agreements.forEach(agreement=>{
+                            agreement.courses = agreement.courses.map(c=>({
+                                ...c,
+                                courses:c.courses.filter(c=>c)
+                            }))
+                        })
+                    })
+                })
+            })
+       
+
+            return Object.entries(a.data.groups).flatMap(([k, v]) => v.map(v => new Group(k, v, collegeName, major!)))
+        } else {
+            return null
+        }
+    }).filter(g => g)
+
+    //Ensure unique name
+    majorAgreementsParsed.forEach(g => {
+        if (!g) return;
+        const name = g.data.name
+        if (majorGroupNameMap.has(name)) {
+            const id = majorGroupNameMap.get(name)!
+            majorGroupNameMap.set(name, id + 1)
+            g.data.name = g!.data.name + ` (${id + 1})`
+        } else {
+            majorGroupNameMap.set(name, 0)
+        }
+
+    })
+
+    //Prefill from classes taken based on clear requirements
+    majorAgreementsParsed.forEach(g => {
+        const templateCellIds = g.getRequiredCellIDs().concat(g.getSmartPickCellIDs(agreements));
+        templateCellIds.forEach(id => {
+            const agreement = agreements.get(id)
+
+            if (agreement) {
+                const hasClearOption = agreement.articulation.sendingArticulation.pickOneGroup.length === 1
+                if (hasClearOption) {
+                    agreement.articulation.sendingArticulation.pickOneGroup[0]?.fromClasses.forEach(c => {
+                        if (!fromClassesTaken[c.courseIdentifierParentId]) {
+                            fromClassesTaken[c.courseIdentifierParentId] = {
+                                ...c,
+                                requiredBy: []
+                            }
+                        }
+                        fromClassesTaken[c.courseIdentifierParentId]!.requiredBy.push(`${g.schoolName}: ${g.majorName}`)
+                    })
+                }
+            }
+        })
+    })
+    const fufilment: FulfillmentProps = {
+        fromClassesTaken: {
+            ...userFromClassesTaken,
+            ...fromClassesTaken
+        },
+        numClassesUsed: numClassesUsed,
+        agreements: agreements
+    }
+
+    if (typeof window !== "undefined") {
+        window.majorAgreementsParsed = majorAgreementsParsed;
+        window.fufillment = fufilment;
+    }
+
+    const inProgress = (majorAgreementsParsed.filter(g => g.required === 'REQUIRED').some(g => !g.isFufilled(fufilment)?.fufilled))
 
     return (
-        <div className="p-2 w-full max-w-6xl mx-auto space-y-12">
-            <div className="md:grid grid-cols-2 gap-4 w-full">
-                <Card>
+        <div className="p-2 px-6 w-full max-w-6xl mx-auto space-y-12" ref={animationParent}>
+            <h1 className="md:text-3xl font-bold text-xl">
+                {home.name} Transfer Planner
+            </h1>
+            <div className="md:grid grid-cols-2 gap-4 w-full space-y-4 md:space-y-0">
+                <Card className="max-w-[90vw]">
                     <CardHeader>
                         <CardTitle>
                             I Want To Transfer To...
@@ -80,12 +231,12 @@ export function Plan({ transferColleges, homeID, communityColleges }: Props) {
                                 }
                                 }
                                 transferColleges={optionsTransferFiltered} />
-                            <div className="flex flex-wrap overflow-y-auto gap-2 text-sm">
+                            <div ref={animationParent} className="flex flex-wrap overflow-y-auto gap-2 text-sm">
                                 {
                                     selectedColleges.map((n) => {
                                         const college = transferColleges.get(Number(n))
                                         return (
-                                            <Button onClick={(e) => setSelectedTransferColleges((prev) => {
+                                            <Button key={n} onClick={(e) => setSelectedTransferColleges((prev) => {
                                                 const copy = { ...prev }
                                                 delete copy[n]
                                                 return copy;
@@ -99,13 +250,13 @@ export function Plan({ transferColleges, homeID, communityColleges }: Props) {
                         </aside>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="max-w-[90vw]">
                     <CardHeader>
                         <CardTitle>
                             The Majors I Want Are...
                         </CardTitle>
                         <CardDescription>
-                            {selectedColleges.length} majors(s) selected
+                            {Object.keys(majorsFiltered).length} majors(s) selected
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -115,7 +266,7 @@ export function Plan({ transferColleges, homeID, communityColleges }: Props) {
                                 options={majorOptions}
                                 onSelect={(id) => {
                                     setSelectedMajors({
-                                        ...selectedMajors,
+                                        ...majorsFiltered,
                                         [id]: {
                                             transferCollegeID: Number(id.split("[SPLIT]")[1]),
                                             value: id
@@ -124,13 +275,13 @@ export function Plan({ transferColleges, homeID, communityColleges }: Props) {
                                 }
                                 }
                             />
-                            <div className="flex flex-wrap overflow-y-auto gap-2 text-sm">
+                            <div ref={animationParent} className="flex flex-wrap overflow-y-auto gap-2 text-sm">
                                 {
-                                    Object.entries(selectedMajors).map(([key, major]) => {
+                                    Object.entries(majorsFiltered).map(([key, major]) => {
                                         const [majorName, collegeID] = key.split("[SPLIT]")
                                         const college = transferColleges.get(Number(collegeID))!.code
                                         return (
-                                            <Button onClick={(e) => setSelectedMajors((prev) => {
+                                            <Button key={key} onClick={(e) => setSelectedMajors((prev) => {
                                                 const copy = { ...prev }
                                                 delete copy[key]
                                                 return copy;
@@ -150,55 +301,85 @@ export function Plan({ transferColleges, homeID, communityColleges }: Props) {
 
 
             {
-                (selectedMajorSet.length === 0 && false) ?
+                (Object.keys(majorsFiltered).length === 0) ?
                     <div className="text-center py-12">
                         <Label>Select a Transfer College and Major to begin ☝️</Label>
                     </div>
 
                     :
-                    <>
+                    <div className="space-y-12">
 
-                    <Alert className="items-center">
-                        <MessageCircleWarning/>
-                        <AlertTitle>Pending Requirements</AlertTitle>
-                        <AlertDescription>
-                            Complete the questions at the bottom of this page to get the most accurate recommendations
-                        </AlertDescription>
-                    </Alert>
-                    <section className="space-y-4">
-                        <h1 className="font-bold md:text-2xl text-xl">
-                            Requirements
-                        </h1>
-                        <div>
-                            <Collapsible>
-                                <Card className="inline-block">
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-4">
-                                            <p>Intro To Fortnite (G1A)</p>
-                                            <Badge>
-                                                6 Units
-                                            </Badge>
-                                            <div>
-                                                <CollapsibleTrigger asChild>
-                                                    <Button variant="secondary" size="tiny" Icon={ChevronsUpDown} />
-                                                </CollapsibleTrigger>
-                                            </div>
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CollapsibleContent>
-                                        <CardContent>
-                                            <CardDescription>
-                                                Hello
-                                            </CardDescription>
-                                        </CardContent>
-                                    </CollapsibleContent>
-                                </Card>
-                            </Collapsible>
-                        </div>
+                        <section className="space-y-4" ref={animationParent}>
+                            <h1 className="font-bold md:text-2xl text-xl">
+                                Requirements
+                            </h1>
+                            {
+                                (inProgress || !allQueriesDone) ?
 
-                    </section>
+                                    <Alert className="items-center max-w-[90vw]">
+                                        <AlertCircle />
+                                        <AlertTitle>This list is INCOMPLETE</AlertTitle>
+                                        <AlertDescription>
+                                            Complete the questions at the bottom of this page to get the most accurate recommendations
+                                        </AlertDescription>
+                                    </Alert>
 
-                    </>
+                                    :
+                                    <>
+                                        <PlanFinished homeCollege={home.name} />
+
+                                        <Alert className="items-center max-w-[90vw]">
+                                            <CheckIcon />
+                                            <AlertTitle>(Almost) Looks Good!</AlertTitle>
+                                            <AlertDescription>
+                                                <b>THIS IS NOT A REPLACEMENT FOR A COLLEGE COUNSELOR</b>
+                                                <br /><br />
+                                                While you have completed all the requirements for this plan, we HIGHLY suggest manually reviewing ASSIST.org and a college counselor to make sure you are on the right track.
+                                                <aside className="flex flex-wrap gap-2 pt-4">
+                                                    <Button variant="link" Icon={LinkIcon}>
+                                                        Review ASSIST.org
+                                                    </Button>
+                                                    <Button variant="link"
+                                                        onClick={() => {
+                                                            const url = `https://www.google.com/search?btnI=1&q=${encodeURIComponent(home.name + ' counseling')}`
+                                                            window.open(url, '_blank')
+                                                        }}
+                                                        Icon={LinkIcon}>
+                                                        Create Appointment with College Counselor
+                                                    </Button>
+                                                </aside>
+                                            </AlertDescription>
+                                        </Alert>
+                                    </>
+
+                            }
+
+                            <PlanClassTable
+                                userSelected={Object.values(userFromClassesTaken)}
+                                hardRequirements={Object.values(fromClassesTaken)} />
+
+                        </section>
+
+                        <section className="space-y-4">
+                            <h1 className="font-bold md:text-2xl text-xl">
+                                To do
+                            </h1>
+                            <div className="space-y-4">
+                                {
+                                    majorAgreementsParsed.map(g =>
+                                    (
+                                        (g.required === 'REQUIRED') ?
+                                            <PlanGroup key={`${g.schoolName}-${g.majorName}-${g.data.name}`}
+                                                fulfilment={fufilment} setUserFromClassesTaken={setUserFromClassesTaken}
+                                                group={g} />
+                                            : <Fragment key={`${g.schoolName}-${g.majorName}-${g.data.name}`} />
+                                    )
+                                    )
+                                }
+                            </div>
+                        </section>
+
+                    </div>
 
             }
 
@@ -206,5 +387,13 @@ export function Plan({ transferColleges, homeID, communityColleges }: Props) {
 
 
         </div>
+    )
+}
+
+export function Plan(props: Props) {
+    return (
+        <QueryClientProvider client={queryClient}>
+            <PlanInner {...props} />
+        </QueryClientProvider>
     )
 }
