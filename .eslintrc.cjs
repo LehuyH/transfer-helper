@@ -5,12 +5,14 @@ const config = {
     "project": true
   },
   "plugins": [
-    "@typescript-eslint"
+    "@typescript-eslint",
+    "eslint-plugin-next-on-pages"
   ],
   "extends": [
     "next/core-web-vitals",
     "plugin:@typescript-eslint/recommended-type-checked",
-    "plugin:@typescript-eslint/stylistic-type-checked"
+    "plugin:@typescript-eslint/stylistic-type-checked",
+     "plugin:eslint-plugin-next-on-pages/recommended"
   ],
   "rules": {
     "@typescript-eslint/array-type": "off",
