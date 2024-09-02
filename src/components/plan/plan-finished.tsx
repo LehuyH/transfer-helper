@@ -51,11 +51,11 @@ export function PlanFinished({ homeCollege }: {
                                                 Create Appointment with College Counselor
                                             </a>
                                         </Button>
-                                        <Button variant="default" Icon={StarIcon}>
+                                        {/* <Button variant="default" Icon={StarIcon}>
                                             <a href="https://studykit.app" target="_blank">
                                                 Free Study Tools (also made by me)
                                             </a>
-                                        </Button>
+                                        </Button> */}
                                     </aside>
                                 </DrawerDescription>
                             </DrawerHeader>
@@ -97,11 +97,11 @@ export function PlanFinished({ homeCollege }: {
                                                 Create Appointment with College Counselor
                                             </a>
                                         </Button>
-                                        <Button variant="default" Icon={StarIcon}>
+                                        {/* <Button variant="default" Icon={StarIcon}>
                                             <a href="https://studykit.app" target="_blank">
                                               Free Study Tools (also made by me)
                                             </a>
-                                        </Button>
+                                        </Button> */}
                                     </aside>
                                 </SheetDescription>
                             </SheetHeader>
