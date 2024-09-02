@@ -15,7 +15,7 @@ import { Group, FulfillmentProps } from "~/lib/classes";
 import { PlanGroup } from "./plan-group";
 import { useState,Fragment } from "react";
 import { PlanClassTable } from "./plan-class-table";
-import { Course } from "@lehuyh/assist-js/types";
+import Confetti from 'react-confetti-boom';
 
 
 
@@ -56,7 +56,7 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
     const optionsTransferFiltered = new Map([
         ...transferColleges
     ])
-
+    
     //CLEANUP
     selectedColleges.forEach(v => optionsTransferFiltered.delete(Number(v)))
     const majorsFiltered = Object.fromEntries(
@@ -73,7 +73,7 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
             delete userFromClassesTaken[k]
         }
     })
-    
+   
     const majorOptions = selectedColleges.map(id => {
         const college = transferColleges.get(Number(id))!
         const optionsUnique = Array.from(college.majors)
@@ -109,19 +109,37 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
 
     const agreements = new Map() as FulfillmentProps["agreements"]
     const fromClassesTaken = {} as FulfillmentProps["fromClassesTaken"]
-    const majorAgreementsParsed = majorQueries.flatMap(a => {
+    const majorGroupNameMap = new Map<string,number>()
+    const majorAgreementsParsed = majorQueries.flatMap((a,i) => {
         if (a.data) {
+            const inputData = Object.values(majorsFiltered)[i]!
+            const [major,id] = inputData.value.split("[SPLIT]")
+            const collegeName = transferColleges.get(Number(id))!.name
             a.data.agreements.forEach(agreement => {
                 agreements.set(agreement.templateCellId, {
                     ...agreement,
-                    major: `${a.data.to.names[0]!.name}: ${a.data.major}`
+                    major: `${collegeName}: ${major}`
                 })
             })
-            return Object.entries(a.data.groups).flatMap(([k, v]) => v.map(v => new Group(k, v, a.data.to.names[0]!.name, a.data.major)))
+            return Object.entries(a.data.groups).flatMap(([k, v]) => v.map(v => new Group(k, v,collegeName, major!)))
         } else {
             return null
         }
-    }).filter(g => g) as Group[]
+    }).filter(g => g)
+    
+    //Ensure unique name
+    majorAgreementsParsed.forEach(g=>{
+        if(!g) return;
+        const name = g.data.name
+        if(majorGroupNameMap.has(name)){
+            const id = majorGroupNameMap.get(name)!
+            majorGroupNameMap.set(name,id+1)
+            g.data.name = g!.data.name + ` (${id+1})`
+        }else{
+            majorGroupNameMap.set(name,0)
+        }
+
+    })
 
     //Prefill from classes taken based on clear requirements
     majorAgreementsParsed.forEach(g => {
@@ -145,7 +163,6 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
             }
         })
     })
-
     const fufilment: FulfillmentProps = {
        fromClassesTaken : {
            ...userFromClassesTaken,
@@ -160,8 +177,10 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
         window.fufillment = fufilment;
     }
 
+    const inProgress = (majorAgreementsParsed.filter(g => g.required === 'REQUIRED').some(g => !g.isFufilled(fufilment)?.fufilled))
+
     return (
-        <div className="p-2 px-6 w-full max-w-6xl mx-auto space-y-12">
+        <div className="p-2 px-6 w-full max-w-6xl mx-auto space-y-12" ref={animationParent}>
             <h1 className="md:text-3xl font-bold text-xl">
                 {home.name} Transfer Planner
             </h1>
@@ -271,12 +290,12 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                     :
                     <div className="space-y-12">
 
-                        <section className="space-y-4">
+                        <section className="space-y-4" ref={animationParent}>
                             <h1 className="font-bold md:text-2xl text-xl">
                                 Requirements
                             </h1>
                             {
-                                (majorAgreementsParsed.filter(g => g.required === 'REQUIRED').some(g => !g.isFufilled(fufilment))) ?
+                                inProgress ?
 
                                 <Alert className="items-center">
                                     <AlertCircle />
@@ -287,22 +306,32 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                                 </Alert>
 
                                 :
-                                <Alert className="items-center">
-                                    <CheckIcon />
-                                    <AlertTitle>Looks Good!</AlertTitle>
-                                    <AlertDescription>
-                                        You have completed all the requirements for this plan. However we HIGHLY suggest manually reviewing ASSIST.org and a college counselor to make sure you are on the right track.
+                                <>
+                                    <div className="fixed top-0 left-0 z-10 pointer-events-none">
+                                        <Confetti mode='boom' particleCount={200} y={-0.1} spreadDeg={180} />
+                                    </div>
+                                    <Alert className="items-center">
+                                        <CheckIcon />
+                                        <AlertTitle>Looks Good!</AlertTitle>
+                                        <AlertDescription>
+                                            You have completed all the requirements for this plan. However we HIGHLY suggest manually reviewing ASSIST.org and a college counselor to make sure you are on the right track.
 
-                                        <aside className="flex flex-wrap gap-2 pt-4">
-                                            <Button variant="link" Icon={LinkIcon}>
-                                                Review ASSIST.org
-                                            </Button>
-                                            <Button variant="link" Icon={LinkIcon}>
-                                                Create Appointment with College Counselor
-                                            </Button>
-                                        </aside>
-                                    </AlertDescription>
-                                </Alert>
+                                            <aside className="flex flex-wrap gap-2 pt-4">
+                                                <Button variant="link" Icon={LinkIcon}>
+                                                    Review ASSIST.org
+                                                </Button>
+                                                <Button variant="link"
+                                                    onClick={() => {
+                                                        const url = `https://www.google.com/search?btnI=1&q=${encodeURIComponent(home.name + ' counseling')}`
+                                                        window.open(url, '_blank')
+                                                    }}
+                                                    Icon={LinkIcon}>
+                                                    Create Appointment with College Counselor
+                                                </Button>
+                                            </aside>
+                                        </AlertDescription>
+                                    </Alert>
+                                </>
 
                             }
 

@@ -10,6 +10,7 @@ import { Button } from "../ui/button";
 import { motion, AnimatePresence } from "framer-motion"
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Badge } from "../ui/badge";
+import { debug } from "console";
 
 interface FufilmentContextValue extends FulfillmentProps{
     setUserFromClassesTaken:Dispatch<SetStateAction<FulfillmentProps["fromClassesTaken"]>>
@@ -26,6 +27,8 @@ export const FufilmentContext = createContext<FufilmentContextValue>(defaultFufi
 
 export function PlanGroup({ group, fulfilment, setUserFromClassesTaken }: { group: Group, fulfilment: FulfillmentProps, 
     setUserFromClassesTaken: Dispatch<SetStateAction<FulfillmentProps["fromClassesTaken"]>> }) {
+    const fufillmentCheck = group.isFufilled(fulfilment)
+    
     return (
         <Card>
             <CardHeader>
@@ -44,7 +47,9 @@ export function PlanGroup({ group, fulfilment, setUserFromClassesTaken }: { grou
                     {
                         (group.instruction.pick) ?
                             <>
-                                Pick {group.instruction.pick.amount} {group.instruction.type}(s) from
+                                Pick {group.instruction.pick.amount} {group.instruction.pick.type.toLowerCase()}({
+                                    (group.instruction.pick.type.toLowerCase().endsWith("s") ? "es" : "s")
+                                }) from
                             </>
                             : <>
                                 Complete
@@ -52,6 +57,11 @@ export function PlanGroup({ group, fulfilment, setUserFromClassesTaken }: { grou
                     }
                     {
                         (" " + group.sections.map(s => s.letter).join(` ${group.instruction.type.toLowerCase()} `))
+                    }
+                    {
+                        fufillmentCheck?.message && <p>
+                            <Badge variant="destructive">{fufillmentCheck.message}</Badge>
+                        </p>
                     }
                 </h2>
                 <FufilmentContext.Provider value={{
@@ -62,7 +72,7 @@ export function PlanGroup({ group, fulfilment, setUserFromClassesTaken }: { grou
                         group.sections.map((s, i) => {
                             return (
                                 <Fragment key={s.letter}>
-                                    <PlanSection key={s.letter} section={s} />
+                                    <PlanSection groupHasInstruction={group.instruction.pick !== undefined || group.instruction.type === 'Or'} key={s.letter} section={s} />
                                     {(i !== group.sections.length - 1) && <Separator />}
                                 </Fragment>
                             )
@@ -77,15 +87,16 @@ export function PlanGroup({ group, fulfilment, setUserFromClassesTaken }: { grou
 }
 
 
-function PlanSection({ section }: { section: Section }) {
+function PlanSection({ section, groupHasInstruction }: { section: Section, groupHasInstruction: boolean }) {
     const fufilment = useContext(FufilmentContext)
     const readyCheck = section.readyCheck(fufilment)
     const fufilmentCheck = section.isFufilled(fufilment)
+    const fuilled = fufilmentCheck.fufilled && ( !groupHasInstruction || fufilmentCheck.classes > 0)
     return (
         <div className="py-4 md:flex items-start gap-12">
             <Avatar className="mb-2 md:mb-0 md:translate-x-0 -translate-x-1">
                 <AvatarFallback className={
-                    (fufilmentCheck.fufilled) ? "bg-green-600 text-white" : ""
+                    (fuilled) ? "bg-green-600 text-white" : ""
                 }>{section.letter}</AvatarFallback>
             </Avatar>
 
@@ -94,7 +105,7 @@ function PlanSection({ section }: { section: Section }) {
                     (section.instruction.pick) && 
                     <Alert>
                         {
-                            (fufilmentCheck.fufilled) ? <CheckIcon className="text-green-500 shrink-0"/> : <AlertCircle/>
+                            (fuilled) ? <CheckIcon className="text-green-500 shrink-0"/> : <AlertCircle/>
                         }
                         <AlertTitle>{
                             (section.instruction.pick)
@@ -102,14 +113,14 @@ function PlanSection({ section }: { section: Section }) {
                                 : `Complete ${section.letter}`                            
                         }</AlertTitle>
                         <AlertDescription>
-                            {(fufilmentCheck.fufilled) ? "You are good to go!" : readyCheck.message}
+                            {(fuilled) ? "You are good to go!" : readyCheck.message}
                         </AlertDescription>
                     </Alert>
                 }
                 {
                     section.agreements.map((a, i) => {
                         return (
-                            <SectionRow key={i} cells={a} hasInstruction={typeof section.instruction.pick !== 'undefined'} />
+                            <SectionRow key={i} cells={a} hasInstruction={typeof section.instruction.pick !== 'undefined' || groupHasInstruction} />
                         )
                     })
                 }
@@ -136,13 +147,11 @@ function PlanCell({ cell: c, hasInstruction }: { cell: Cell, hasInstruction: boo
     const fufilment = useContext(FufilmentContext)
     const agreement = fufilment.agreements.get(c.templateCellId)
     const fufilmentCheck = c.isFufilled(fufilment)
-    const noArticulation = !(agreement?.articulation.sendingArticulation.pickOneGroup)
+    const noArticulation = !agreement || (agreement?.articulation.sendingArticulation.pickOneGroup?.length === 0)
 
     const optionSelectedIndex = agreement?.articulation.sendingArticulation.pickOneGroup.findIndex(g=>
         g.fromClasses.map(c=>c.courseIdentifierParentId).every(id=>fufilment.fromClassesTaken[id])
     )
-
-    const oneOptionSelected = optionSelectedIndex !== -1
 
     const onlyOneOption = agreement?.articulation.sendingArticulation.pickOneGroup.length === 1
     const [open, setOpen] = useState(!fufilmentCheck.fufilled && !noArticulation)
@@ -152,7 +161,6 @@ function PlanCell({ cell: c, hasInstruction }: { cell: Cell, hasInstruction: boo
         const fromClasesToRemove = agreement?.articulation.sendingArticulation.pickOneGroup.flatMap(g=>
             g.fromClasses.flatMap(c=>c.courseIdentifierParentId) ?? []
         ) ?? []
-
         fufilment.setUserFromClassesTaken(prev=>{
             const copy = {...prev}
             fromClasesToRemove.forEach(c=>delete copy[c])
@@ -174,7 +182,7 @@ function PlanCell({ cell: c, hasInstruction }: { cell: Cell, hasInstruction: boo
                 </CollapsibleTrigger>
                 <span className="flex items-center gap-2">
                     <Badge variant='outline'>
-                        {c.data.courses.reduce((a, b) => a + b.maxUnits, 0)} Units
+                        {c.data.courses.reduce((a, b) => a + (b?.maxUnits ?? 0), 0)} Units
                     </Badge>
                     {
                         c.data.courses.map(c=>`${c.prefix}${c.courseNumber} - ${c.courseTitle}`).join(", ")
@@ -203,13 +211,14 @@ function PlanCell({ cell: c, hasInstruction }: { cell: Cell, hasInstruction: boo
                               
                                     <CardDescription className="space-y-2">
                                         <b>{fufilmentCheck.warnings.join("\n")}</b>
-                                        <p>
+                                        <span>
                                             {
                                                 (onlyOneOption && !hasInstruction) &&
                                                 "You cannot de-select this option as it is required"
                                             }
-                                             {
-                                                (agreement?.receivingAttributes.courseAttributes ?? [])
+                                             {  
+                                                //@ts-ignore incorrect type
+                                                (agreement?.receivingAttributes.courseAttributes?.map(a=>a.content) ?? [])
                                                 .concat(agreement?.receivingAttributes.seriesAttributes ?? [])
                                                 .concat(agreement?.receivingAttributes.seriesCourseAttributes ?? [])
                                                 .concat(agreement?.articulation.courseAttributes ?? [])
@@ -218,14 +227,14 @@ function PlanCell({ cell: c, hasInstruction }: { cell: Cell, hasInstruction: boo
                                                 .concat(agreement?.articulation.sendingArticulation.generalAttributes ?? [])
                                                 .join(', ')
                                            }
-                                        </p>
-                                        <p>
+                                        </span>
+                                        <span>
                                         {
                                            (c.data.type === 'Series') ?
                                             (c.data.generalAttributes ?? []).concat(c.data.seriesAttributes ?? []).join(', ')
                                             : (c.data.generalAttributes ?? []).concat(c.data.courseAttributes ?? []).join(', ')
                                         }
-                                        </p>
+                                        </span>
                                     </CardDescription>
                           
                                 </CardHeader>
@@ -242,7 +251,7 @@ function PlanCell({ cell: c, hasInstruction }: { cell: Cell, hasInstruction: boo
                                                             }
                                                         </p>
                                                         <Button
-                                                            onClick={()=>toggleOption(g.fromClasses)}
+                                                            onClick={()=>{c.selected = true;toggleOption(g.fromClasses)}}
                                                             variant={(i === optionSelectedIndex) ? 'default' : 'secondary'}
                                                             disabled={(onlyOneOption && !hasInstruction)}
                                                             Icon={ (i === optionSelectedIndex) ? CheckIcon : undefined }

@@ -58,7 +58,7 @@ export class Cell {
         }
         this.data = cell;
         this.templateCellId = cell.templateCellId;
-        this.units = this.data.courses?.reduce((a, b) => a + b.maxUnits, 0)
+        this.units = this.data.courses?.reduce((a, b) => a + (b?.maxUnits ?? 0), 0)
 
         if (this.checkIsRequired() !== "NEUTRAL") {
             this.required = this.checkIsRequired();
@@ -77,6 +77,7 @@ export class Cell {
 
         let missing: number[] = [];
         let warnings: string[] = [];
+        let groupMissing: string[] = [];
         const agreement = agreements.get(this.templateCellId);
         if (!agreement) {
             return {
@@ -114,8 +115,7 @@ export class Cell {
             }
 
             if (!groupFufilled) {
-                const groupMissing = group.fromClasses.map((fromClass) => `${fromClass.prefix}${fromClass.courseNumber}`);
-                warnings.push(`Complete the following courses from the group: ${groupMissing.join(", ")}`);
+                groupMissing.push(group.fromClasses.map((fromClass) => `${fromClass.prefix}${fromClass.courseNumber}`).join(", "));
             } else {
                 atLeastOneFufilled = true;
                 //Commit draftUsedMap to numClassesUsed
@@ -128,6 +128,10 @@ export class Cell {
         if (atLeastOneFufilled) {
             warnings = [];
             missing = [];
+        }
+
+        if(groupMissing.length > 0){
+            warnings.push(`Select: ${groupMissing.join(" OR ")}`)
         }
 
         return {
@@ -233,17 +237,31 @@ export class Section {
         }
     }
 
-    updateRequiredCells(){
+    updateRequiredCells(articulations?:FulfillmentProps['agreements']){
          //Populate max
-         this.requiredAgreements = this.agreements.filter(a => a.some(c => c.required === "REQUIRED"))
-         this.max = {
-             unitsFufilled: this.agreements.reduce((a, b) => a+ b.reduce((a, v) => v.units, 0), 0),
-             classesFufilled: this.agreements.reduce((a, b) => a + b.reduce((a, v) => v.data.courses?.length ?? 0, 0), 0)
+         this.requiredAgreements = this.agreements.filter(a => a.some(c => c.required === "REQUIRED" || c.selected))
+         if(!articulations){
+            this.max = {
+                unitsFufilled: this.agreements.reduce((a, b) => a+ b.reduce((a, v) => a + v.units, 0), 0),
+                classesFufilled: 0
+            }
+         }else{
+            this.max = {
+                unitsFufilled: this.agreements.reduce((a, b) => a+ b.reduce((a, v) => a +v.units, 0), 0),
+                classesFufilled: this.agreements.flat().reduce((a,cell)=>{
+                    const agreement = articulations.get(cell.templateCellId)
+                    const hasNoArticulations = !agreement || agreement?.articulation.sendingArticulation.pickOneGroup.length === 0
+                    if(hasNoArticulations){
+                        return a;
+                    }
+                    return a + ((cell.data.courses?.length > 0) ? 1 : 0)
+                },0)
+            }
          }
     }
     
-    smartPickCellIDs(agreements: FulfillmentProps['agreements']){
-        if(!this.required) return [];
+    smartPickCellIDs(agreements: FulfillmentProps['agreements'],force?:boolean){
+        if(!this.required && !force) return [];
 
         const alreadySelected = this.getRequiredCellIDs()
         const articulationsByRow = this.agreements.map(row=>row.map(c=>({
@@ -266,7 +284,7 @@ export class Section {
             }
         }
 
-        this.updateRequiredCells()
+        this.updateRequiredCells(agreements)
 
         //If options less than pick OR instruction is All, return all options
         if((this.instruction.pick && options.length <= this.instruction.pick.amount) || this.instruction.all){
@@ -281,7 +299,7 @@ export class Section {
         units: number,
         classes: number
     } {
-
+        this.updateRequiredCells(props.agreements)
         const { units: unitsFufilled, classes: classesFufilled } = this.getFilledData(props);
         if (this.instruction.pick) {
             const amount = this.instruction.pick.amount;
@@ -314,11 +332,11 @@ export class Section {
         let unitsFufilled = 0;
         let classesFufilled = 0;
 
-        for (const agreement of this.requiredAgreements) {
+        for (const agreement of this.agreements) {
             for (const cell of agreement) {
-                if(!cell.selected) continue;
                 const fufillment = cell.isFufilled(props);
                 if (fufillment.fufilled) {
+                    cell.selected = true;
                     unitsFufilled += cell.units;
                     classesFufilled += cell.data.courses?.length ?? 0;
                 }
@@ -332,7 +350,11 @@ export class Section {
     }
 
     getRequiredCellIDs() {
-        return this.agreements.flatMap(a => a).filter(c => c.required === "REQUIRED").flatMap(c => c.data.templateCellId)
+        return this.agreements.flatMap(a => a).filter(c => c.required === "REQUIRED" || c.selected).flatMap(c => c.data.templateCellId)
+    }
+
+    getAllCellIDs(){
+        return this.agreements.flatMap(a => a).flatMap(c => c.data.templateCellId)
     }
 
     readyCheck(props: FulfillmentProps): {
@@ -403,7 +425,7 @@ export class Group {
         //Parse required
         if (name.toLowerCase().includes('recommended')) {
             this.required = "NOT_REQUIRED";
-        } else if (name.toLowerCase().includes('require')) {
+        } else if (name.toLowerCase().includes('require') || name === 'DEFAULT') {
             this.required = "REQUIRED";
         } else if (this.data.groupAttributes?.find(a => a.toLowerCase().includes("require") && !a.toLowerCase().includes("recommended"))) {
             this.required = "REQUIRED";
@@ -432,7 +454,10 @@ export class Group {
 
         //Build sections
         this.sections = this.data.sections.map((s,i) =>{
-            const section = new Section(s,this.required)
+            const section = new Section(s,(this.instruction.pick || this.instruction.type == 'Or') ? 'NEUTRAL' : this.required)
+            if(this.instruction.pick && !section.instruction.pick){
+                section.instruction = this.instruction
+            }
             section.letter = ALPHABET[i]!
             return section
         })
@@ -521,7 +546,30 @@ export class Group {
     }
 
     getSmartPickCellIDs(props: FulfillmentProps['agreements']){
-        return this.sections.flatMap(s => s.smartPickCellIDs(props))
+        //IF there's an obvious OR choice (where only one section has all options), only smart pick that section
+        if(this.instruction.type === 'Or'){
+            const sectionsWithAllOptions = this.sections.filter(s=>{
+                const cellIDS = s.getAllCellIDs()
+                const allHasAgreement = cellIDS.every(id=>{
+                    const agreement = props.get(id)
+                    if(!agreement) return false;
+                    return agreement.articulation.sendingArticulation.pickOneGroup.length > 0
+                })
+
+                return allHasAgreement
+            })
+
+            //Only if ONE
+            if(sectionsWithAllOptions.length === 1){
+                return sectionsWithAllOptions[0]!.smartPickCellIDs(props,true)
+            }else{
+                //Don't choose for user
+                return []
+            }
+        }
+        const options = this.sections.flatMap(s => s.smartPickCellIDs(props))
+        if(this.instruction.pick) return [];
+        return options
     }
 
     getSelectedSections() {
@@ -588,12 +636,20 @@ export class Group {
 
         //OR, at least one fulfilled
         else if (this.instruction.type === "Or") {
-            return this.sections.some(s => s.isFufilled(props).fufilled)
+            return {
+                fufilled: this.sections.some(s => s.isFufilled(props).fufilled),
+                missing:[],
+                warnings:[]
+            }
         }
 
         //AND, all fulfilled
         else {
-            return this.sections.every(s => s.isFufilled(props).fufilled)
+            return {
+                fufilled: this.sections.every(s => s.isFufilled(props).fufilled),
+                missing:[],
+                warnings:[]
+            }
         }
     }
 }

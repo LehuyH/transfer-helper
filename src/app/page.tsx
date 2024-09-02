@@ -25,7 +25,7 @@ export default async function HomePage() {
       <aside className="max-w-4xl w-full mx-auto px-6">
         <p className="space-y-1">
           <Label htmlFor="homeCC">
-            Your Primary CC
+            Your Primary Community College
           </Label>
           <CollegePicker options={options}/>
         </p>
