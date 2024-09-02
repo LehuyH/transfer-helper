@@ -107,6 +107,8 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
         })
     })
 
+    const allQueriesDone = majorQueries.every(a => a.isPending === false)
+
     const agreements = new Map() as FulfillmentProps["agreements"]
     const fromClassesTaken = {} as FulfillmentProps["fromClassesTaken"]
     const majorGroupNameMap = new Map<string, number>()
@@ -121,6 +123,23 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                     major: `${collegeName}: ${major}`
                 })
             })
+
+            //Cleanup null objects in group courses
+            Object.keys(a.data.groups).forEach(key=>{
+                const groups = a.data.groups[key]
+                groups?.forEach(group=>{
+                    group.sections.forEach(section=>{
+                        section.agreements.forEach(agreement=>{
+                            agreement.courses = agreement.courses.map(c=>({
+                                ...c,
+                                courses:c.courses.filter(c=>c)
+                            }))
+                        })
+                    })
+                })
+            })
+       
+
             return Object.entries(a.data.groups).flatMap(([k, v]) => v.map(v => new Group(k, v, collegeName, major!)))
         } else {
             return null
@@ -295,7 +314,7 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                                 Requirements
                             </h1>
                             {
-                                inProgress ?
+                                (inProgress || !allQueriesDone) ?
 
                                     <Alert className="items-center max-w-[90vw]">
                                         <AlertCircle />
