@@ -13,7 +13,7 @@ export interface FulfillmentProps {
     fromClassesTaken: Record<number, Course & {
         requiredBy: string[]
     }>,
-    numClassesUsed: Map<number, number>,
+    numClassesUsed: Map<string, string>,
     agreements: Map<string, (Agreement &{
         major: string
     })>
@@ -89,14 +89,15 @@ export class Cell {
 
         let atLeastOneFufilled = false;
         for (const group of agreement.articulation.sendingArticulation.pickOneGroup) {
-            const draftUsedMap = new Map<number, number>(numClassesUsed);
+            const draftUsedMap = new Map<string, string>(numClassesUsed);
             let groupFufilled = true;
 
             for (const fromClass of group.fromClasses) {
                 const fromClassID = fromClass.courseIdentifierParentId;
+                const key = `${fromClassID}-${agreement.major}`
                 const classLimited = fromClass.attributes?.some(a => a.content.toLowerCase().includes("can only apply to one"))
                 const classNotFufilled = !fromClassesTaken[fromClassID];
-                const classCantBeUsed = fromClassesTaken[fromClassID] && classLimited && draftUsedMap.get(fromClassID) !== 0;
+                const classCantBeUsed = fromClassesTaken[fromClassID] && classLimited &&  (draftUsedMap.get(key) && draftUsedMap.get(key) !== this.templateCellId);
 
                 if (classNotFufilled || classCantBeUsed) {
                     groupFufilled = false;
@@ -105,8 +106,7 @@ export class Cell {
                         warnings.push(`${fromClass.courseTitle} cannot be reused for transfer course ${this.data.courses?.map(c => c.courseTitle).join(", ")}`);
                     }
                 } else {
-                    draftUsedMap.set(fromClassID, (draftUsedMap.get(fromClassID) ?? 0) + 1);
-
+                    draftUsedMap.set(key,this.templateCellId);
                 }
             }
 
@@ -120,7 +120,7 @@ export class Cell {
                 atLeastOneFufilled = true;
                 //Commit draftUsedMap to numClassesUsed
                 for (const [key, value] of draftUsedMap) {
-                    numClassesUsed.set(key, value);
+                    numClassesUsed.set(key, value ?? "");
                 }
             }
         }
@@ -450,6 +450,20 @@ export class Group {
             this.instruction = {
                 type: this.data.groupInstruction.conjunction === "Or" ? "Or" : "And"
             }
+        }
+
+        //Parse advisements
+        if(this.data.groupAdvisements && this.data.groupAdvisements.length > 0){
+            this.data.groupAdvisements.forEach(a=>{
+
+                if(a.type === 'NInNDifferentAreas'){
+                    this.instruction.pick = {
+                        amount: a.amount,
+                        type: a.amountUnitType.toLowerCase().includes("unit") ? "UNIT" : "CLASS"
+                    }
+                }
+
+            })
         }
 
         //Build sections

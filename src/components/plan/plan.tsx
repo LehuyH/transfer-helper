@@ -144,7 +144,7 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
         } else {
             return null
         }
-    }).filter(g => g)
+    }).filter(g => g) as Group[]
 
     //Ensure unique name
     majorAgreementsParsed.forEach(g => {
@@ -196,7 +196,10 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
         window.fufillment = fufilment;
     }
 
-    const inProgress = (majorAgreementsParsed.filter(g => g.required === 'REQUIRED').some(g => !g.isFufilled(fufilment)?.fufilled))
+    let groupsToDisplay = majorAgreementsParsed.filter(g => g.required === 'REQUIRED')
+    if(groupsToDisplay.length === 0) groupsToDisplay = majorAgreementsParsed
+
+    const inProgress = (groupsToDisplay.some(g => !g.isFufilled(fufilment)?.fufilled))
 
     return (
         <div className="p-2 px-6 w-full max-w-6xl mx-auto space-y-12" ref={animationParent}>
@@ -366,13 +369,13 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                             </h1>
                             <div className="space-y-4">
                                 {
-                                    majorAgreementsParsed.map(g =>
+                                    groupsToDisplay.map(g =>
                                     (
-                                        (g.required === 'REQUIRED') ?
-                                            <PlanGroup key={`${g.schoolName}-${g.majorName}-${g.data.name}`}
-                                                fulfilment={fufilment} setUserFromClassesTaken={setUserFromClassesTaken}
-                                                group={g} />
-                                            : <Fragment key={`${g.schoolName}-${g.majorName}-${g.data.name}`} />
+                                       
+                                        <PlanGroup key={`${g.schoolName}-${g.majorName}-${g.data.name}`}
+                                            fulfilment={fufilment} setUserFromClassesTaken={setUserFromClassesTaken}
+                                            group={g} />
+                                            
                                     )
                                     )
                                 }
