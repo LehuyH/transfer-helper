@@ -151,9 +151,9 @@ function PlanCell({ cell: c, hasInstruction }: { cell: Cell, hasInstruction: boo
     const fufilmentCheck = c.isFufilled(fufilment)
     const noArticulation = !agreement || (agreement?.articulation.sendingArticulation.pickOneGroup?.length === 0)
 
-    const optionSelectedIndex = agreement?.articulation.sendingArticulation.pickOneGroup.findIndex(g=>
+    const optionSelectedIndex = (fufilmentCheck.fufilled) ? agreement?.articulation.sendingArticulation.pickOneGroup.findIndex(g=>
         g.fromClasses.map(c=>c.courseIdentifierParentId).every(id=>fufilment.fromClassesTaken[id])
-    )
+    ) : -1
 
     const onlyOneOption = agreement?.articulation.sendingArticulation.pickOneGroup.length === 1
     const [open, setOpen] = useState(!fufilmentCheck.fufilled && !noArticulation)
