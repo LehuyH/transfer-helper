@@ -190,12 +190,7 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
         numClassesUsed: numClassesUsed,
         agreements: agreements
     }
-
-    if (typeof window !== "undefined") {
-        window.majorAgreementsParsed = majorAgreementsParsed;
-        window.fufillment = fufilment;
-    }
-
+    
     let groupsToDisplay = majorAgreementsParsed.filter(g => g.required === 'REQUIRED')
     if(groupsToDisplay.length === 0) groupsToDisplay = majorAgreementsParsed
 
@@ -333,11 +328,11 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
 
                                         <Alert className="items-center max-w-[90vw]">
                                             <CheckIcon />
-                                            <AlertTitle>(Almost) Looks Good!</AlertTitle>
+                                            <AlertTitle>Your Plan Is (Almost) Ready!</AlertTitle>
                                             <AlertDescription>
                                                 <b>THIS IS NOT A REPLACEMENT FOR A COLLEGE COUNSELOR</b>
                                                 <br /><br />
-                                                While you have completed all the requirements for this plan, we HIGHLY suggest manually reviewing ASSIST.org and a college counselor to make sure you are on the right track.
+                                                While this tool attempts to find all the requirements for your goals, we HIGHLY suggest manually validaiting this plan with ASSIST.org and a college counselor to make sure you are on the right track.
                                                 <aside className="flex flex-wrap gap-2 pt-4">
                                                     <Button variant="link" Icon={LinkIcon}>
                                                         Review ASSIST.org
@@ -358,6 +353,7 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                             }
 
                             <PlanClassTable
+                                id="plan-class-table"
                                 userSelected={Object.values(userFromClassesTaken)}
                                 hardRequirements={Object.values(fromClassesTaken)} />
 
@@ -365,7 +361,7 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
 
                         <section className="space-y-4">
                             <h1 className="font-bold md:text-2xl text-xl">
-                                To do
+                                Classes To Pick
                             </h1>
                             <div className="space-y-4">
                                 {

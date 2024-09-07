@@ -68,12 +68,14 @@ export const columns: ColumnDef<Course & {
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
-  data: TData[]
+  data: TData[],
+  id:string
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
+  id
 }: DataTableProps<TData, TValue>) {
   const table = useReactTable({
     data,
@@ -83,7 +85,7 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="rounded-md border max-w-[90vw]">
-      <Table>
+      <Table id={id}>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id}>
@@ -129,9 +131,10 @@ export function DataTable<TData, TValue>({
   )
 }
 
-export function PlanClassTable({ hardRequirements, userSelected }: { 
+export function PlanClassTable({ hardRequirements, userSelected, id }: { 
     hardRequirements: (Course&{requiredBy:string[]})[],
-    userSelected: (Course&{requiredBy:string[]})[]
+    userSelected: (Course&{requiredBy:string[]})[], 
+    id:string
 }) {
 
     const data = hardRequirements.map(c=>({
@@ -145,7 +148,7 @@ export function PlanClassTable({ hardRequirements, userSelected }: {
     })))
 
     return (
-        <DataTable columns={columns} data={data}/>
+        <DataTable columns={columns} data={data} id={id}/>
     )
 
 }
