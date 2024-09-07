@@ -44,55 +44,57 @@ export function PlanGroup({ group, fulfilment, setUserFromClassesTaken }: { grou
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <h2 className="md:text-xl text-lg font-thin tracking-tight">
-                    {
-                        (group.instruction.pick) ?
+                <div className="sticky top-0 bg-background z-10 pt-6 pb-4 -translate-y-0.5">
+                    <h2 className="md:text-xl text-lg font-thin tracking-tight">
+                        {
+                            (group.instruction.pick) ?
+                                <>
+                                    Pick {group.instruction.pick.amount} {group.instruction.pick.type.toLowerCase()}({
+                                        (group.instruction.pick.type.toLowerCase().endsWith("s") ? "es" : "s")
+                                    }) from
+                                </>
+                                : <>
+                                    Complete
+                                </>
+                        }
+                        {
+                            (" " + group.sections.map(s => s.letter).join(` ${group.instruction.type.toLowerCase()} `))
+                        }
+                        {
+                            (group.instruction.area) ?
                             <>
-                                Pick {group.instruction.pick.amount} {group.instruction.pick.type.toLowerCase()}({
-                                    (group.instruction.pick.type.toLowerCase().endsWith("s") ? "es" : "s")
-                                }) from
-                            </>
-                            : <>
-                                Complete
-                            </>
-                    }
-                    {
-                        (" " + group.sections.map(s => s.letter).join(` ${group.instruction.type.toLowerCase()} `))
-                    }
-                    {
-                        (group.instruction.area) ? 
-                        <>
-                            <br />
-                            With {group.instruction.area.amount} {
-                            group.instruction.area.type.toLowerCase()
-                            }
-                            {
-                                (group.instruction.area.type.toLowerCase().endsWith("s")) ? "(es) " : "(s) "
-                            }
-                            in {group.instruction.area.sectionCount} different sections
-                        </> : <>    </>
-                    }
-                    {
-                        (group.instruction.additional) ? 
-                        <>
-                            <br />
-                            With at least {group.instruction.additional.amount} {
-                            group.instruction.additional.type.toLowerCase()
-                            }
-                            {
-                                (group.instruction.additional.type.toLowerCase().endsWith("s")) ? "(es) " : "(s) "
-                            }
-                            in total
-                        </> : <>    </>
-                    }
-                </h2>
-                <aside className="flex flex-wrap gap-2">
-                    {
-                        (fufillmentCheck.messages.length > 0) && (
-                            fufillmentCheck.messages.map(m=><Badge variant="destructive" key={m}>{m}</Badge>)
-                        )
-                    }
-                </aside>
+                                <br />
+                                With {group.instruction.area.amount} {
+                                group.instruction.area.type.toLowerCase()
+                                }
+                                {
+                                    (group.instruction.area.type.toLowerCase().endsWith("s")) ? "(es) " : "(s) "
+                                }
+                                in {group.instruction.area.sectionCount} different sections
+                            </> : <>    </>
+                        }
+                        {
+                            (group.instruction.additional) ?
+                            <>
+                                <br />
+                                With at least {group.instruction.additional.amount} {
+                                group.instruction.additional.type.toLowerCase()
+                                }
+                                {
+                                    (group.instruction.additional.type.toLowerCase().endsWith("s")) ? "(es) " : "(s) "
+                                }
+                                in total
+                            </> : <>    </>
+                        }
+                    </h2>
+                    <aside className="flex flex-wrap gap-2">
+                        {
+                            (fufillmentCheck.messages.length > 0) && (
+                                fufillmentCheck.messages.map(m=><Badge variant="destructive" key={m}>{m}</Badge>)
+                            )
+                        }
+                    </aside>
+                </div>
                 <FufilmentContext.Provider value={{
                     ...fulfilment,
                     setUserFromClassesTaken

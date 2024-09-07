@@ -362,7 +362,7 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                             <h1 className="font-bold md:text-2xl text-xl">
                                 Classes To Pick
                             </h1>
-                            <div className="space-y-4">
+                            <div className="space-y-4 relative">
                                 {
                                     groupsToDisplay.map(g =>
                                     (
