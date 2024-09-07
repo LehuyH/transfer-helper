@@ -20,6 +20,9 @@ const Checkbox = React.forwardRef<
     <CheckboxPrimitive.Indicator
       className={cn("flex items-center justify-center text-current")}
     >
+      <svg>
+        <circle cx="7.5" cy="7.5" r="5" fill="currentColor" />
+      </svg>
     </CheckboxPrimitive.Indicator>
   </CheckboxPrimitive.Root>
 ))
