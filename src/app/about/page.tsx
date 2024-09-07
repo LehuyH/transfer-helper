@@ -44,7 +44,7 @@ export default function About() {
                     <li>Answer a few quick questions</li>
                 </ol>
                 <p><strong>You're done! Review your required class list and plan accordingly 🎉</strong></p>
-                <h1>Better than ASSIST.org</h1>
+                <h1>How is this different from ASSIST.org?</h1>
                 <h2>Before</h2>
                 <ul>
                     <li>🤼 Juggle multiple links for each college and major</li>

@@ -1,13 +1,13 @@
 import Link from "next/link"
 import { Button } from "../button"
-import { HomeIcon, InfoIcon, MapIcon, RabbitIcon } from "lucide-react"
+import { FileWarning, HomeIcon, InfoIcon, RabbitIcon } from "lucide-react"
 import { LAST_UPDATED } from "~/lib/data"
 import { Badge } from "../badge"
 
 export const links = [
   { href:"/", label: "Home", Icon: HomeIcon},
   { href: "/about", label: "About", Icon: InfoIcon },
-  { href: "https://github.com/LehuyH/transfer-helper/issues", label: "Roadmap", Icon: MapIcon, newTab: true },
+  { href: "https://github.com/LehuyH/transfer-helper/issues", label: "Report Issue", Icon: FileWarning, newTab: true },
 ]
 
 export default function NavDesktop({className}:{
