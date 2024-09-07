@@ -6,6 +6,7 @@ import type {
     Group as IGroup,
     Section as ISection,
 } from "@lehuyh/assist-js/types";
+import { debug } from "console";
 
 export type REQUIREMENT_STATUS = "REQUIRED" | "NOT_REQUIRED" | "NEUTRAL";
 
@@ -247,7 +248,14 @@ export class Section {
             }
          }else{
             this.max = {
-                unitsFufilled: this.agreements.reduce((a, b) => a+ b.reduce((a, v) => a +v.units, 0), 0),
+                unitsFufilled: this.agreements.reduce((a, b) => a+ b.reduce((a, v) =>{
+                    const agreement = articulations.get(v.templateCellId)
+                    const hasNoArticulations = !agreement || agreement?.articulation.sendingArticulation.pickOneGroup.length === 0
+                    if(hasNoArticulations){
+                        return a;
+                    }
+                    return a + v.units
+                }, 0), 0),
                 classesFufilled: this.agreements.flat().reduce((a,cell)=>{
                     const agreement = articulations.get(cell.templateCellId)
                     const hasNoArticulations = !agreement || agreement?.articulation.sendingArticulation.pickOneGroup.length === 0
@@ -411,6 +419,16 @@ export class Group {
             amount: number,
             type: "CLASS" | "UNIT"
         }
+        area?:{
+            amount: number,
+            type: "CLASS" | "UNIT"
+            /** Pick ${type} in ${sectionCount} sections */
+            sectionCount: number
+        }
+        additional?:{
+            amount: number,
+            type: "CLASS" | "UNIT"
+        }
         type: "Or" | "And"
     };
 
@@ -457,9 +475,32 @@ export class Group {
             this.data.groupAdvisements.forEach(a=>{
 
                 if(a.type === 'NInNDifferentAreas'){
-                    this.instruction.pick = {
+                    //@ts-ignore incorrect type
+                    if(a.areaType === 'Concentrations'){
+                        
+                        if(this.data.groupInstruction){
+                            this.data.groupInstruction.conjunction = 'Or'
+                        }
+
+                        this.instruction.area = {
+                            amount: a.amount,
+                            type: a.amountUnitType.toLowerCase().includes("unit") ? "UNIT" : "CLASS",
+                            //@ts-ignore incorrect type
+                            sectionCount: a.areaAmount
+                        }
+
+                    }else{
+                        this.instruction.pick = {
+                            amount: a.amount,
+                            type: a.amountUnitType.toLowerCase().includes("unit") ? "UNIT" : "CLASS"
+                        }
+                    }
+                }
+
+                if(a.type === 'AdditionalNToReach'){
+                    this.instruction.additional = {
                         amount: a.amount,
-                        type: a.amountUnitType.toLowerCase().includes("unit") ? "UNIT" : "CLASS"
+                        type: a.amountUnitType?.toLowerCase().includes("class") ? "CLASS" : "UNIT"
                     }
                 }
 
@@ -475,84 +516,6 @@ export class Group {
             section.letter = ALPHABET[i]!
             return section
         })
-    }
-
-    /** All instructions are fulfilled */
-    readyCheck(props: FulfillmentProps): {
-        ready: boolean,
-        message: string | null
-    } {
-
-        if (this.instruction.pick) {
-            const amount = this.instruction.pick.amount;
-            const type = this.instruction.pick.type;
-
-            //Cumulative allowed in OR
-            if (this.instruction.type === "Or") {
-                let unitsFufilled = 0;
-                let classesFufilled = 0;
-
-                for (const section of this.getSelectedSections()) {
-                    const fufillment = section.isFufilled(props);
-                    unitsFufilled += fufillment.units;
-                    classesFufilled += fufillment.classes;
-                }
-
-                if (type === "UNIT") {
-                    const passed = unitsFufilled >= amount;
-                    return {
-                        ready: passed,
-                        message: passed ? null : `Please select ${amount - unitsFufilled} more unit(s) across all sections`
-                    }
-                } else {
-                    const passed = classesFufilled >= amount;
-                    return {
-                        ready: passed,
-                        message: passed ? null : `Please select ${amount - classesFufilled} more classe(s) across all sections`
-                    }
-                }
-            }else{
-                //All selected in AND
-                let allFufilled = true;
-                const message: string[] = [];
-               
-                this.getSelectedSections().forEach((s)=>{
-                    const { units, classes } = s.getFilledData(props);
-                    if (type === "UNIT") {
-                        if (units < amount) {
-                            allFufilled = false;
-                            message.push(`Section ${s.letter} requires ${amount - units} more unit(s)`)
-                        }
-                    }else {
-                        if (classes < amount) {
-                            allFufilled = false;
-                            message.push(`Section ${s.letter} requires ${amount - classes} more classe(s_`)
-                        }
-                    }
-                })
-
-                return {
-                    ready: allFufilled,
-                    message: allFufilled ? null : message.join("\n")
-                }
-            }
-        }else{
-            if(this.instruction.type === "Or"){
-                return this.sections.length > 0 ? {
-                    ready: true,
-                    message: null
-                } : {
-                    ready: false,
-                    message: "Please select at least one section"
-                }
-            }else{
-                return {
-                    ready: true,
-                    message: null
-                }
-            }
-        }
-
     }
 
     getRequiredCellIDs() {
@@ -591,85 +554,133 @@ export class Group {
     }
 
     isFufilled(props: FulfillmentProps) {
+        //Compute maxes for each section
+        this.sections.forEach(s=>s.isFufilled(props))
+        
         //PICK
         if (this.instruction.pick) {
+            const amount = this.instruction.pick.amount;
+            const type = this.instruction.pick.type;
+            const messages:string[] = []
             //Pick OR, cumulative allowed
             if (this.instruction.type === "Or") {
                 let unitsFufilled = 0;
                 let classesFufilled = 0;
 
-                for (const section of this.getSelectedSections()) {
+                for (const section of this.sections) {
                     const fufillment = section.isFufilled(props);
                     unitsFufilled += fufillment.units;
                     classesFufilled += fufillment.classes;
                 }
 
-                const amount = this.instruction.pick.amount;
-                const type = this.instruction.pick.type;
                 if (type === "UNIT") {
-                    const compareTo = Math.min(amount, this.getSelectedSections().reduce
+                    const compareTo = Math.min(amount, this.sections.reduce
                     ((a, b) => a + (b.max.unitsFufilled ?? 0), 0))
                     
-                    return {
-                        fufilled: unitsFufilled >= compareTo,
-                        units: unitsFufilled,
-                        classes: classesFufilled
-                    }
+                    const passed = unitsFufilled >= compareTo;
+                    if(!passed) messages.push(`Please select ${amount - unitsFufilled} more unit(s) from any section`)
                 } else {
-                    const compareTo = Math.min(amount, this.getSelectedSections().reduce
+                    const compareTo = Math.min(amount, this.sections.reduce
                     ((a, b) => a + (b.max.classesFufilled ?? 0), 0))
-                    return {
-                        fufilled: classesFufilled >= compareTo,
-                        units: unitsFufilled,
-                        classes: classesFufilled
-                    }
+                    const passed = classesFufilled >= compareTo;
+                    if(!passed) messages.push(`Please select ${amount - classesFufilled} more class(es) from any section`)
                 }
             }
 
             //Pick AND, cumulative not allowed
             if (this.instruction.type === "And") {
-                let allFufilled = true;
+                const messageOfAnd:string[] = []
                 for (const section of this.sections) {
                     const fufillment = section.isFufilled(props);
                     if (this.instruction.pick.type === "UNIT") {
                         const compareTo = Math.min(this.instruction.pick.amount, section.max.unitsFufilled ?? 0)
                         if (fufillment.units < compareTo) {
-                            allFufilled = false;
-                            break;
+                            messageOfAnd.push(`Section ${section.letter} requires ${this.instruction.pick.amount - fufillment.units} more unit(s)`)
                         }
                     } else {
                         const compareTo = Math.min(this.instruction.pick.amount, section.max.classesFufilled ?? 0)
                         if (fufillment.classes < compareTo) {
-                            allFufilled = false;
-                            break;
+                            messageOfAnd.push(`Section ${section.letter} requires ${this.instruction.pick.amount - fufillment.classes} more class(es)`)
                         }
                     }
                 }
 
-                return {
-                    fufilled: allFufilled,
-                    message: allFufilled ? null : `Please select ${this.instruction.pick.amount} more classe(s) across all sections`
-                }
+                if(messageOfAnd.length > 0) messages.push(messageOfAnd.join("\n"))
             }
 
+            if(this.instruction.area){
+                const amount = this.instruction.area.amount;
+                const type = this.instruction.area.type;
+                const sectionCount = this.instruction.area.sectionCount;
+                let possibleSections = 0
+                
+                //Must have {{amount}} {{type}} in {{sectionCount}} sections
+                let numSectionsFilled = 0;
+                for(const s of this.sections){
+                    const fufillment = s.isFufilled(props);
+                    if(type === "UNIT"){
+                        if(s.max.unitsFufilled >= amount) possibleSections++
+                        if(fufillment.units < amount) continue;
+                        numSectionsFilled++
+                    }else{
+                        if(s.max.classesFufilled >= amount) possibleSections++
+                        if(fufillment.classes < amount) continue;
+                        numSectionsFilled++
+                    }
+                }
+               
+                const target = Math.min(possibleSections,sectionCount)
+                if(numSectionsFilled < target) messages.push(`${target - numSectionsFilled} more sections need at least ${amount} ${type.toLowerCase()}(${(type === 'CLASS') ? 'es' : 's'})`)
+            }
 
+            if(this.instruction.additional){
+                const amount = this.instruction.additional.amount
+                const type = this.instruction.additional.type
+                let numPossible = 0;
+                let numFufilled = 0;
+                for(const s of this.sections){
+                    const fufillment = s.isFufilled(props);
+                    if(type === "UNIT"){
+                        numPossible += s.max.unitsFufilled
+                        numFufilled += fufillment.units
+                        if(fufillment.units < amount) continue;
+                    }else{
+                        numPossible += s.max.classesFufilled
+                        numFufilled += fufillment.classes
+                        if(fufillment.classes < amount) continue;
+                    }
+                }
+
+                const target = Math.min(numPossible,amount)
+                if(numFufilled < target) messages.push(`Pick at least ${target - numFufilled} more ${type.toLowerCase()}(${(type === 'CLASS') ? 'es' : 's'})`)
+            }
+
+            return {
+                fufilled: messages.length === 0,
+                messages
+            }
         }
 
         //OR, at least one fulfilled
         else if (this.instruction.type === "Or") {
+            const messages:string[] = []
+            const fufilled = this.sections.some(s => s.isFufilled(props).fufilled)
+            if(!fufilled) messages.push("Please complete at least one section's instructions")
             return {
-                fufilled: this.sections.some(s => s.isFufilled(props).fufilled),
-                missing:[],
-                warnings:[]
+                fufilled,
+                messages
             }
         }
 
+
         //AND, all fulfilled
         else {
+            const messages:string[] = []
+            const fufilled = this.sections.every(s => s.isFufilled(props).fufilled)
+            if(!fufilled) messages.push("Complete as many section instructions as possible")
             return {
-                fufilled: this.sections.every(s => s.isFufilled(props).fufilled),
-                missing:[],
-                warnings:[]
+                fufilled,
+                messages
             }
         }
     }

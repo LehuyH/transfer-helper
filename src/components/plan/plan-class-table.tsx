@@ -55,11 +55,11 @@ export const columns: ColumnDef<Course & {
     },
     {
         accessorKey: "hardRequire",
-        header: "Hard Requirement?",
+        header: "Requirement Type ",
         cell: (info)=>{
             return (
                 <Badge variant={info.row.getValue('hardRequire') ? 'destructive' : 'secondary'}>
-                    {info.row.getValue('hardRequire') ? 'Hard Requirement' : 'User Selected'}
+                    {info.row.getValue('hardRequire') ? 'Must Take' : 'User Selected'}
                 </Badge>
             )
         }
@@ -68,14 +68,12 @@ export const columns: ColumnDef<Course & {
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
-  data: TData[],
-  id:string
+  data: TData[]
 }
 
 export function DataTable<TData, TValue>({
   columns,
-  data,
-  id
+  data
 }: DataTableProps<TData, TValue>) {
   const table = useReactTable({
     data,
@@ -85,7 +83,7 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="rounded-md border max-w-[90vw]">
-      <Table id={id}>
+      <Table>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id}>
@@ -131,10 +129,9 @@ export function DataTable<TData, TValue>({
   )
 }
 
-export function PlanClassTable({ hardRequirements, userSelected, id }: { 
+export function PlanClassTable({ hardRequirements, userSelected }: { 
     hardRequirements: (Course&{requiredBy:string[]})[],
-    userSelected: (Course&{requiredBy:string[]})[], 
-    id:string
+    userSelected: (Course&{requiredBy:string[]})[]
 }) {
 
     const data = hardRequirements.map(c=>({
@@ -148,7 +145,7 @@ export function PlanClassTable({ hardRequirements, userSelected, id }: {
     })))
 
     return (
-        <DataTable columns={columns} data={data} id={id}/>
+        <DataTable columns={columns} data={data}/>
     )
 
 }

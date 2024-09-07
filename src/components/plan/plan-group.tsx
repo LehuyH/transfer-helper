@@ -30,7 +30,6 @@ export const FufilmentContext = createContext<FufilmentContextValue>(defaultFufi
 export function PlanGroup({ group, fulfilment, setUserFromClassesTaken }: { group: Group, fulfilment: FulfillmentProps, 
     setUserFromClassesTaken: Dispatch<SetStateAction<FulfillmentProps["fromClassesTaken"]>> }) {
     const fufillmentCheck = group.isFufilled(fulfilment)
-    
     return (
         <Card className="max-w-[90vw]">
             <CardHeader>
@@ -61,11 +60,39 @@ export function PlanGroup({ group, fulfilment, setUserFromClassesTaken }: { grou
                         (" " + group.sections.map(s => s.letter).join(` ${group.instruction.type.toLowerCase()} `))
                     }
                     {
-                        fufillmentCheck?.message && <p>
-                            <Badge variant="destructive">{fufillmentCheck.message}</Badge>
-                        </p>
+                        (group.instruction.area) ? 
+                        <>
+                            <br />
+                            With {group.instruction.area.amount} {
+                            group.instruction.area.type.toLowerCase()
+                            }
+                            {
+                                (group.instruction.area.type.toLowerCase().endsWith("s")) ? "(es) " : "(s) "
+                            }
+                            in {group.instruction.area.sectionCount} different sections
+                        </> : <>    </>
+                    }
+                    {
+                        (group.instruction.additional) ? 
+                        <>
+                            <br />
+                            With at least {group.instruction.additional.amount} {
+                            group.instruction.additional.type.toLowerCase()
+                            }
+                            {
+                                (group.instruction.additional.type.toLowerCase().endsWith("s")) ? "(es) " : "(s) "
+                            }
+                            in total
+                        </> : <>    </>
                     }
                 </h2>
+                <aside className="flex flex-wrap gap-2">
+                    {
+                        (fufillmentCheck.messages.length > 0) && (
+                            fufillmentCheck.messages.map(m=><Badge variant="destructive" key={m}>{m}</Badge>)
+                        )
+                    }
+                </aside>
                 <FufilmentContext.Provider value={{
                     ...fulfilment,
                     setUserFromClassesTaken
@@ -93,7 +120,7 @@ function PlanSection({ section, groupHasInstruction }: { section: Section, group
     const fufilment = useContext(FufilmentContext)
     const readyCheck = section.readyCheck(fufilment)
     const fufilmentCheck = section.isFufilled(fufilment)
-    const fuilled = fufilmentCheck.fufilled && ( !groupHasInstruction || fufilmentCheck.classes > 0)
+    const fuilled = fufilmentCheck.fufilled && ( !groupHasInstruction || fufilmentCheck.classes > 0) && readyCheck.ready
     return (
         <div className="py-4 md:flex items-start gap-12">
             <Avatar className="mb-2 md:mb-0 md:translate-x-0 -translate-x-1">

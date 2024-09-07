@@ -308,7 +308,7 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                     <div className="space-y-12">
 
                         <section className="space-y-4" ref={animationParent}>
-                            <h1 className="font-bold md:text-2xl text-xl">
+                            <h1 id="plan-class-table" className="font-bold md:text-2xl text-xl">
                                 Requirements
                             </h1>
                             {
@@ -353,7 +353,6 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                             }
 
                             <PlanClassTable
-                                id="plan-class-table"
                                 userSelected={Object.values(userFromClassesTaken)}
                                 hardRequirements={Object.values(fromClassesTaken)} />
 
