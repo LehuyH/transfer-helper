@@ -8,7 +8,7 @@ import { getCollegeInfo } from "~/lib/data";
 export default async function HomePage() {
 
   const collegeData = await getCollegeInfo()
-  const options = collegeData.communityColleges.map(entry=>entry[1]).map(s=>({
+  const options = collegeData.communityColleges.map(entry=>entry[1]).filter(c=>c.category === 'CCC').map(s=>({
     label: s.name,
     value: s.name.toLowerCase().replaceAll(" ", "-").replaceAll(",","%2C").toString()
   }))
