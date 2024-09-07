@@ -6,7 +6,6 @@ import type {
     Group as IGroup,
     Section as ISection,
 } from "@lehuyh/assist-js/types";
-import { debug } from "console";
 
 export type REQUIREMENT_STATUS = "REQUIRED" | "NOT_REQUIRED" | "NEUTRAL";
 
@@ -32,8 +31,10 @@ export class Cell {
     units: number;
     required: REQUIREMENT_STATUS;
     selected = false;
+    section:Section
 
-    constructor(cell: CellType, forceRequirements?: REQUIREMENT_STATUS) {
+    constructor(cell: CellType, section:Section, forceRequirements?: REQUIREMENT_STATUS) {
+        this.section = section
         //@ts-ignore HACK for GEs
         if(!cell.courses && cell.generalEducationArea){
             //@ts-ignore
@@ -74,7 +75,7 @@ export class Cell {
 
     isFufilled(
         { fromClassesTaken, numClassesUsed, agreements }: FulfillmentProps
-    ): Fulfillment {
+    ): Fulfillment & { fromClassIDs?:number[] } {
 
         let missing: number[] = [];
         let warnings: string[] = [];
@@ -89,6 +90,7 @@ export class Cell {
         }
 
         let atLeastOneFufilled = false;
+        let fromClassIDs:number[] = []
         for (const group of agreement.articulation.sendingArticulation.pickOneGroup) {
             const draftUsedMap = new Map<string, string>(numClassesUsed);
             let groupFufilled = true;
@@ -119,6 +121,7 @@ export class Cell {
                 groupMissing.push(group.fromClasses.map((fromClass) => `${fromClass.prefix}${fromClass.courseNumber}`).join(", "));
             } else {
                 atLeastOneFufilled = true;
+                fromClassIDs = group.fromClasses.map(c=>c.courseIdentifierParentId)
                 //Commit draftUsedMap to numClassesUsed
                 for (const [key, value] of draftUsedMap) {
                     numClassesUsed.set(key, value ?? "");
@@ -137,6 +140,7 @@ export class Cell {
 
         return {
             fufilled: atLeastOneFufilled,
+            fromClassIDs,
             missing: missing,
             warnings: warnings
         };
@@ -179,6 +183,8 @@ export class Section {
     letter = "";
     data: ISection;
 
+    group:Group;
+
     agreements: Cell[][];
     requiredAgreements: Cell[][] = [];
     required = false;
@@ -200,8 +206,9 @@ export class Section {
     }
 
 
-    constructor(section: ISection, forceRequirements?: REQUIREMENT_STATUS) {
+    constructor(section: ISection,group:Group,forceRequirements?: REQUIREMENT_STATUS) {
         this.data = section;
+        this.group = group
         //Populate instruction
         //CASE 1, Pick N
         const pickN = this.data.sectionAdvisements?.find(a => a.type === 'NFollowing')
@@ -225,7 +232,7 @@ export class Section {
         }
 
         //We only force requirement if there's no instruction 
-        this.agreements = section.agreements.map(r => r.courses.map(c => new Cell(c,
+        this.agreements = section.agreements.map(r => r.courses.map(c => new Cell(c,this,
             (this.instruction.pick) ?  undefined : forceRequirements
         )))
         
@@ -308,28 +315,34 @@ export class Section {
         classes: number
     } {
         this.updateRequiredCells(props.agreements)
-        const { units: unitsFufilled, classes: classesFufilled } = this.getFilledData(props);
+        const { units: unitsFufilled, classes: classesFufilled, fufilledFromClassIDs } = this.getFilledData(props);
         if (this.instruction.pick) {
             const amount = this.instruction.pick.amount;
             const type = this.instruction.pick.type;
             if (type === "UNIT") {
+                const passed = unitsFufilled >= Math.min(amount, this.max.unitsFufilled);
+                if(passed) fufilledFromClassIDs.forEach(id=>props.fromClassesTaken[id]!.requiredBy = Array.from(new Set([`${this.group.schoolName}: ${this.group.majorName}`, ...props.fromClassesTaken[id]?.requiredBy ?? []])))
                 return {
-                    fufilled: unitsFufilled >= Math.min(amount, this.max.unitsFufilled),
+                    fufilled: passed,
                     units: unitsFufilled,
                     classes: classesFufilled
 
                 };
             } else {
+                const passed = classesFufilled >= Math.min(amount, this.max.classesFufilled);
+                if(passed) fufilledFromClassIDs.forEach(id=>props.fromClassesTaken[id]!.requiredBy = Array.from(new Set([`${this.group.schoolName}: ${this.group.majorName}`, ...props.fromClassesTaken[id]?.requiredBy ?? []])))
                 return {
-                    fufilled: classesFufilled >= Math.min(amount, this.max.classesFufilled),
+                    fufilled: passed,
                     units: unitsFufilled,
                     classes: classesFufilled
                 }
             }
         } else {
             //ALL
+            const passed = classesFufilled >= this.max.classesFufilled;
+            if(passed) fufilledFromClassIDs.forEach(id=>props.fromClassesTaken[id]!.requiredBy = Array.from(new Set([`${this.group.schoolName}: ${this.group.majorName}`, ...props.fromClassesTaken[id]?.requiredBy ?? []])))
             return {
-                fufilled: classesFufilled >= this.max.classesFufilled,
+                fufilled: passed,
                 units: unitsFufilled,
                 classes: classesFufilled
             }
@@ -339,6 +352,7 @@ export class Section {
     getFilledData(props: FulfillmentProps) {
         let unitsFufilled = 0;
         let classesFufilled = 0;
+        const fufilledFromClassIDs = [] as number[]
 
         for (const agreement of this.agreements) {
             for (const cell of agreement) {
@@ -347,13 +361,15 @@ export class Section {
                     cell.selected = true;
                     unitsFufilled += cell.units;
                     classesFufilled += cell.data.courses?.length ?? 0;
+                    if(fufillment.fromClassIDs) fufilledFromClassIDs.push(...fufillment.fromClassIDs)
                 }
             }
         }
 
         return {
             units: unitsFufilled,
-            classes: classesFufilled
+            classes: classesFufilled,
+            fufilledFromClassIDs
         }
     }
 
@@ -443,7 +459,7 @@ export class Group {
         //Parse required
         if (name.toLowerCase().includes('recommended')) {
             this.required = "NOT_REQUIRED";
-        } else if (name.toLowerCase().includes('require') || name === 'DEFAULT' || name.toLowerCase().includes('core')) {
+        } else if (name.toLowerCase().includes('require') || name.includes('DEFAULT') || name.toLowerCase().includes('core') || name.toLowerCase().includes('prep')) {
             this.required = "REQUIRED";
         } else if (this.data.groupAttributes?.find(a => a.toLowerCase().includes("require") && !a.toLowerCase().includes("recommended"))) {
             this.required = "REQUIRED";
@@ -480,6 +496,7 @@ export class Group {
                         
                         if(this.data.groupInstruction){
                             this.data.groupInstruction.conjunction = 'Or'
+                            this.instruction.type = 'Or'
                         }
 
                         this.instruction.area = {
@@ -509,7 +526,7 @@ export class Group {
 
         //Build sections
         this.sections = this.data.sections.map((s,i) =>{
-            const section = new Section(s,(this.instruction.pick || this.instruction.type == 'Or') ? 'NEUTRAL' : this.required)
+            const section = new Section(s,this,(this.instruction.pick || this.instruction.type == 'Or') ? 'NEUTRAL' : this.required)
             if(this.instruction.pick && !section.instruction.pick){
                 section.instruction = this.instruction
             }

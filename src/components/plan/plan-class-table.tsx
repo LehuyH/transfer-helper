@@ -39,7 +39,7 @@ export const columns: ColumnDef<Course & {
                         <Button size="sm" variant="secondary" Icon={EyeIcon}/> 
                     </PopoverTrigger>
                     <PopoverContent>
-                        <CardTitle className="text-base">Required By</CardTitle>
+                        <CardTitle className="text-base">Required By {(info.row.getValue('requiredBy') as string[])!.length} Universities</CardTitle>
                         <ul className="list list-disc list-inside text-sm">
                             {
                                 (info.row.getValue('requiredBy') as string[]).map(s=>{
@@ -142,7 +142,7 @@ export function PlanClassTable({ hardRequirements, userSelected }: {
         ...c,
         shortName: `${c.prefix}${c.courseNumber}`,
         hardRequire: false
-    })))
+    }))).sort((a,b)=>b.requiredBy.length - a.requiredBy.length)
 
     return (
         <DataTable columns={columns} data={data}/>

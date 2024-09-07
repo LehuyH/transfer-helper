@@ -3,7 +3,7 @@
 import { DataSchool, getMajor, LAST_UPDATED } from "~/lib/data";
 import { PlanCollegePicker } from "./plan-college-picker";
 import { Button } from "../ui/button";
-import { AlertCircle, CheckIcon, LinkIcon, XIcon } from "lucide-react";
+import { AlertCircle, CheckIcon, Download, LinkIcon, StarIcon, XIcon } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { PickerWithGroups } from "../ui/picker";
 import { Label } from "../ui/label";
@@ -13,7 +13,7 @@ import { useLocalStorage } from "~/lib/hooks/useLocalStorage";
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { Group, FulfillmentProps } from "~/lib/classes";
 import { PlanGroup } from "./plan-group";
-import { useState, Fragment } from "react";
+import { useState } from "react";
 import { PlanClassTable } from "./plan-class-table";
 import { PlanFinished } from "./plan-finished";
 
@@ -125,20 +125,20 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
             })
 
             //Cleanup null objects in group courses
-            Object.keys(a.data.groups).forEach(key=>{
+            Object.keys(a.data.groups).forEach(key => {
                 const groups = a.data.groups[key]
-                groups?.forEach(group=>{
-                    group.sections.forEach(section=>{
-                        section.agreements.forEach(agreement=>{
-                            agreement.courses = agreement.courses.map(c=>({
+                groups?.forEach(group => {
+                    group.sections.forEach(section => {
+                        section.agreements.forEach(agreement => {
+                            agreement.courses = agreement.courses.map(c => ({
                                 ...c,
-                                courses:c.courses.filter(c=>c)
+                                courses: c.courses.filter(c => c)
                             }))
                         })
                     })
                 })
             })
-       
+
 
             return Object.entries(a.data.groups).flatMap(([k, v]) => v.map(v => new Group(k, v, collegeName, major!)))
         } else {
@@ -190,9 +190,9 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
         numClassesUsed: numClassesUsed,
         agreements: agreements
     }
-    
+
     let groupsToDisplay = majorAgreementsParsed.filter(g => g.required === 'REQUIRED')
-    if(groupsToDisplay.length === 0) groupsToDisplay = majorAgreementsParsed
+    if (groupsToDisplay.length === 0) groupsToDisplay = majorAgreementsParsed
 
     const inProgress = (groupsToDisplay.some(g => !g.isFufilled(fufilment)?.fufilled))
 
@@ -307,7 +307,7 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                     :
                     <div className="space-y-12">
 
-                        <section className="space-y-4" ref={animationParent}>
+                        <section className="space-y-4" id="plan" ref={animationParent}>
                             <h1 id="plan-class-table" className="font-bold md:text-2xl text-xl">
                                 Requirements
                             </h1>
@@ -345,6 +345,41 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                                                         Icon={LinkIcon}>
                                                         Create Appointment with College Counselor
                                                     </Button>
+
+                                                    <Button variant="link" Icon={StarIcon}>
+                                                        <a href="https://studykit.app" target="_blank">
+                                                            Free Study Tools (also made by me)
+                                                        </a>
+                                                    </Button>
+
+                                                    <Button className="w-full" variant="default" Icon={Download} onClick={(e) => {
+                                                        const header = ["Course Code", "Course Title", "Units", "Required By"]
+                                                        const data = Object.values(fufilment.fromClassesTaken).map(c => {
+                                                            const course = `${c.prefix}${c.courseNumber}`
+                                                            return [course, c.courseTitle, c.maxUnits, `(${c.requiredBy.length}) ` + c.requiredBy.join(", ")] as [string, string, number, string]
+
+                                                        })
+                                                            .sort((a, b) => b[3].localeCompare(a[3]))
+
+                                                        const csvContent = header.join(",") + "\n" + (data.map(r => {
+                                                            return r.map(c => {
+                                                                if (typeof c === 'string') return `"${c}"`
+                                                                return c
+                                                            }).join(',')
+                                                        })).join('\n')
+
+                                                        const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+                                                        const url = URL.createObjectURL(csvBlob)
+                                                        const link = document.createElement('a')
+                                                        link.href = url
+                                                        link.setAttribute('download', `${home.name}-${LAST_UPDATED}-plan.csv`)
+                                                        document.body.appendChild(link)
+                                                        link.click()
+                                                        document.body.removeChild(link)
+                                                        URL.revokeObjectURL(url)
+                                                    }}>
+                                                        Download Plan
+                                                    </Button>
                                                 </aside>
                                             </AlertDescription>
                                         </Alert>
@@ -366,11 +401,11 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                                 {
                                     groupsToDisplay.map(g =>
                                     (
-                                       
+
                                         <PlanGroup key={`${g.schoolName}-${g.majorName}-${g.data.name}`}
                                             fulfilment={fufilment} setUserFromClassesTaken={setUserFromClassesTaken}
                                             group={g} />
-                                            
+
                                     )
                                     )
                                 }
