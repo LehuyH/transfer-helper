@@ -130,10 +130,14 @@ export function PlanInner({ transferColleges, homeID, communityColleges }: Props
                 groups?.forEach(group => {
                     group.sections.forEach(section => {
                         section.agreements.forEach(agreement => {
-                            agreement.courses = agreement.courses.map(c => ({
-                                ...c,
-                                courses: c.courses.filter(c => c)
-                            }))
+                           
+                            agreement.courses = agreement.courses.map(c =>{
+                                if(!c.courses) c.courses = []
+                                return ({
+                                    ...c,
+                                    courses: c.courses.filter(c => c)
+                                })
+                            })
                         })
                     })
                 })
