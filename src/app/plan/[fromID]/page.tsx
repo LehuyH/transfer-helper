@@ -48,13 +48,22 @@ export async function generateStaticParams(){
 export default async function PlanPage({ params }: { params: { fromID: string } }) {
 
     const { transferColleges, communityColleges } = await getCollegeInfo()
-    const transferCollegeMap = new Map(transferColleges.sort((a,b)=>{
+    const transferCollegeMap = new Map(transferColleges
+      .sort((a,b)=>{
       const aIsUC = a[1].category === "UC"
       const bIsUC = b[1].category === "UC"
       if(aIsUC && !bIsUC) return -1
       if(!aIsUC && bIsUC) return 1
       return a[1].name.localeCompare(b[1].name)
     }))
+
+    //Update Names
+    transferCollegeMap.set(21,{
+      ...transferCollegeMap.get(21)!,
+      name: "California State University, East Bay / Hayward"
+    })
+
+
     const communityCollegeMap = new Map(communityColleges)
     const home = communityColleges.find(v=>v[1].name.toLowerCase().replaceAll(" ", "-").replaceAll(",","%2C")
     === params.fromID
